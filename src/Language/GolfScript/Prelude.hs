@@ -6,9 +6,13 @@ import Language.GolfScript.Parse
 import qualified Data.HashMap as M
 import Data.Bits
 import Control.Monad.Trans.State
-import Control.Monad (void)
+import Control.Monad (void, filterM)
+import Data.Maybe (mapMaybe)
 
 type S = State Golf
+
+bool :: Val -> Bool
+bool x = notElem x [Int 0, Arr [], Str "", Blk []]
 
 pop' :: S (Maybe Val)
 pop' = gets pop >>= maybe (return Nothing)
@@ -43,8 +47,7 @@ tilde = unary $ \x -> case x of
   Str s -> modify $ exec $ parse $ scan s
 
 bang :: S ()
-bang = unary $ \x -> push' $ Int $
-  if elem x [Int 0, Arr [], Str "", Blk []] then 1 else 0
+bang = unary $ \x -> push' $ Int $ if bool x then 0 else 1
 
 at :: S ()
 at = modify $ \g -> case g of
@@ -59,12 +62,27 @@ backslash = modify $ \g -> case g of
 semicolon :: S ()
 semicolon = void pop'
 
+strToArr :: String -> [Val]
+strToArr = map $ Int . fromIntegral . fromEnum
+
+arrToStr :: [Val] -> String
+arrToStr = mapMaybe $ \x -> case x of
+  Int i -> Just $ toEnum $ fromIntegral $ i
+  _ -> Nothing
+
 comma :: S ()
 comma = unary $ \x -> case x of
   Int i -> push' $ Arr $ map Int [0 .. i-1]
   Arr a -> push' $ Int $ fromIntegral $ length a
   Str s -> push' $ Int $ fromIntegral $ length s
-  Blk _ -> undefined -- take array a, then: filterBy b a
+  Blk b -> unary $ \y -> case y of -- take array a, then: filterBy b a
+    Arr a -> filterM (\v -> push' v >> predicate b) a >>= push' . Arr
+    Str s -> filterM (\v -> push' v >> predicate b) (strToArr s) >>=
+      push' . Str . arrToStr
+    _ -> return ()
+
+predicate :: [Do] -> S Bool
+predicate xs = modify (exec xs) >> fmap (maybe False bool) pop'
 
 lp :: S ()
 lp = unary $ \x -> case x of
