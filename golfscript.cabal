@@ -9,7 +9,7 @@ Cabal-version:      >= 1.8
 Category:           Data
 
 Library
-  Build-Depends:    base, array, hashmap
+  Build-Depends:    base, array, hashmap, transformers
                     
   Exposed-modules:  Language.GolfScript.Base
                     Language.GolfScript.Scan

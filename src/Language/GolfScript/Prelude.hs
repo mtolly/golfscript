@@ -5,72 +5,78 @@ import Language.GolfScript.Base
 import Language.GolfScript.Parse
 import qualified Data.HashMap as M
 import Data.Bits
+import Control.Monad.Trans.State
+import Control.Monad (void)
 
-pushEach :: [Val] -> Golf -> Golf
-pushEach vs g = foldl (flip push) g vs
+type S = State Golf
 
-unary :: (Val -> Golf -> Golf) -> Prim
-unary f = P $ \g -> case pop g of
-  Nothing -> g
-  Just (x, g') -> f x g'
+pop' :: S (Maybe Val)
+pop' = gets pop >>= maybe (return Nothing)
+  (\(x, g) -> put g >> return (Just x))
 
-prim :: Prim -> Val
-prim p = Blk [Prim p]
+push' :: Val -> S ()
+push' x = modify (push x)
 
-lb :: Prim
-lb = P $ \(Golf stk bts vrs) -> Golf stk (0 : bts) vrs
+unary :: (Val -> S ()) -> S ()
+unary f = pop' >>= maybe (return ()) f
 
-rb :: Prim
-rb = P $ \(Golf stk bts vrs) -> case bts of
+prim :: S () -> Val
+prim s = Blk [Prim $ P $ execState s]
+
+lb :: S ()
+lb = modify $ \(Golf stk bts vrs) -> Golf stk (0 : bts) vrs
+
+rb :: S ()
+rb = modify $ \(Golf stk bts vrs) -> case bts of
   [] -> Golf [Arr $ reverse stk] [] vrs
   b : bs -> case splitAt b stk of
     (stkl, stkr) -> Golf ((Arr $ reverse stkl) : stkr) bs vrs
 
-dot :: Prim
-dot = unary $ \x g -> push x $ push x g
+dot :: S ()
+dot = unary $ \x -> push' x >> push' x
 
-tilde :: Prim
-tilde = unary $ \x g -> case x of
-  Int i -> push (Int $ complement i) g
-  Arr a -> pushEach a g
-  Blk b -> exec b g
-  Str s -> exec (parse $ scan s) g
+tilde :: S ()
+tilde = unary $ \x -> case x of
+  Int i -> push' $ Int $ complement i
+  Arr a -> mapM_ push' a
+  Blk b -> modify $ exec b
+  Str s -> modify $ exec $ parse $ scan s
 
-bang :: Prim
-bang = unary $ \x -> push $ Int $
+bang :: S ()
+bang = unary $ \x -> push' $ Int $
   if elem x [Int 0, Arr [], Str "", Blk []] then 1 else 0
 
-at :: Prim
-at = P $ \g -> case g of
+at :: S ()
+at = modify $ \g -> case g of
   Golf (x:y:z:xs) bts vrs -> Golf (z:x:y:xs) bts vrs
   _ -> g
 
-backslash :: Prim
-backslash = P $ \g -> case g of
+backslash :: S ()
+backslash = modify $ \g -> case g of
   Golf (x:y:xs) bts vrs -> Golf (y:x:xs) bts vrs
   _ -> g
 
-semicolon :: Prim
-semicolon = unary $ \_ g -> g
+semicolon :: S ()
+semicolon = void pop'
 
-comma :: Prim
-comma = unary $ \x g -> case x of
-  Int i -> push (Arr $ map Int [0 .. i-1]) g
-  Arr a -> push (Int $ fromIntegral $ length a) g
-  Str s -> push (Int $ fromIntegral $ length s) g
+comma :: S ()
+comma = unary $ \x -> case x of
+  Int i -> push' $ Arr $ map Int [0 .. i-1]
+  Arr a -> push' $ Int $ fromIntegral $ length a
+  Str s -> push' $ Int $ fromIntegral $ length s
   Blk _ -> undefined -- take array a, then: filterBy b a
 
-lp :: Prim
-lp = unary $ \x g -> case x of
-  Int i -> push (Int $ i - 1) g
-  Arr (v : vs) -> push v $ push (Arr vs) g
-  _ -> g
+lp :: S ()
+lp = unary $ \x -> case x of
+  Int i -> push' $ Int $ i - 1
+  Arr (v : vs) -> push' (Arr vs) >> push' v
+  _ -> push' x
 
-rp :: Prim
-rp = unary $ \x g -> case x of
-  Int i -> push (Int $ i + 1) g
-  Arr (unsnoc -> Just (vs, v)) -> push v $ push (Arr vs) g
-  _ -> g
+rp :: S ()
+rp = unary $ \x -> case x of
+  Int i -> push' $ Int $ i + 1
+  Arr (unsnoc -> Just (vs, v)) -> push' (Arr vs) >> push' v
+  _ -> push' x
 
 unsnoc :: [a] -> Maybe ([a], a)
 unsnoc xs = case reverse xs of

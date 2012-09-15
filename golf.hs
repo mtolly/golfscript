@@ -6,5 +6,6 @@ import Language.GolfScript.Prelude
 import System.Environment
 
 main = getArgs >>= \argv -> case argv of
-  [prog] -> print $ exec (parse $ scan prog) prelude
+  [prog] -> putStrLn $ uneval $ reverse $ map Push $ stack $
+    exec (parse $ scan prog) prelude
   _ -> putStrLn "Usage: golf \"program\""

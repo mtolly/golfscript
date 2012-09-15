@@ -56,3 +56,14 @@ act d g@(Golf _ _ vrs) = case d of
 
 exec :: [Do] -> Golf -> Golf
 exec = foldr (flip (.)) id . map act
+
+uneval :: [Do] -> String
+uneval = concatMap $ \d -> case d of
+  Get x -> x
+  Set x -> ':' : x
+  Prim _ -> "prim" -- should never happen
+  Push v -> case v of
+    Int i -> show i
+    Arr a -> "[" ++ uneval (map Push a) ++ "]"
+    Str s -> show s
+    Blk b -> "{" ++ uneval b ++ "}"
