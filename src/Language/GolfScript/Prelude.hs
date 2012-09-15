@@ -101,6 +101,9 @@ unsnoc xs = case reverse xs of
   y : ys -> Just (reverse ys, y)
   _ -> Nothing
 
+backtick :: S ()
+backtick = unary $ \x -> push' $ Str $ uneval [Push x]
+
 prelude :: Golf
 prelude = empty { vars = M.fromList
   [ ("[", prim lb)
@@ -114,4 +117,5 @@ prelude = empty { vars = M.fromList
   , (",", prim comma)
   , ("(", prim lp)
   , (")", prim rp)
+  , ("`", prim backtick)
   ] }

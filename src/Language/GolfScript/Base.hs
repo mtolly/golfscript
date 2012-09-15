@@ -17,14 +17,10 @@ data Do
   deriving (Eq, Show, Read)
 
 newtype Prim = P (Golf -> Golf)
-instance Eq Prim where
-  _ == _ = True
-instance Ord Prim where
-  compare _ _ = EQ
-instance Show Prim where
-  show _ = "<prim>"
-instance Read Prim where
-  readsPrec = error "readsPrec: can't read Prim"
+instance Eq   Prim where _ == _ = True
+instance Ord  Prim where compare _ _ = EQ
+instance Show Prim where show _ = "<prim>"
+instance Read Prim where readsPrec = error "readsPrec: can't read Prim"
 
 data Golf = Golf
   { stack :: [Val]
