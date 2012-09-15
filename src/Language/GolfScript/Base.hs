@@ -7,14 +7,14 @@ data Val
   | Arr [Val]
   | Str String
   | Blk [Do]
-  deriving (Eq, Show, Read)
+  deriving (Eq, Ord, Show, Read)
 
 data Do
   = Push Val
   | Get String
   | Set String
   | Prim Prim
-  deriving (Eq, Show, Read)
+  deriving (Eq, Ord, Show, Read)
 
 newtype Prim = P (Golf -> Golf)
 instance Eq   Prim where _ == _ = True

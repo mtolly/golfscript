@@ -104,6 +104,21 @@ unsnoc xs = case reverse xs of
 backtick :: S ()
 backtick = unary $ \x -> push' $ Str $ uneval [Push x]
 
+-- | Represents two values popped off the stack in type priority order.
+-- For two values of equal type, "FooFoo x y" means stack is [x, y, ..]
+data TwoVals
+  = IntInt Integer Integer
+  | IntArr Integer [Val]
+  | IntStr Integer String
+  | IntBlk Integer [Do]
+  | ArrArr [Val] [Val]
+  | ArrStr [Val] String
+  | ArrBlk [Val] [Do]
+  | StrStr String String
+  | StrBlk String [Do]
+  | BlkBlk [Do] [Do]
+  deriving (Eq, Ord, Show, Read)
+
 prelude :: Golf
 prelude = empty { vars = M.fromList
   [ ("[", prim lb)
