@@ -18,7 +18,8 @@ tokens :-
 
 \-? $digit+                       { Num . read }
 $alphascore ($alphascore|$digit)+ { Var }
-\" (\\ . | [^\\\"])* \"                       { String . read }
+\" (\\ . | [^\\\"])* \"           { String . read }
+\' (\\ . | [^\\\'])* \'           { String . rawString }
 
 . { Var }
 
@@ -35,5 +36,15 @@ data Token
 
 scan :: String -> [Token]
 scan = alexScanTokens
+
+-- | Reads a single-quoted string, where only backslash and single-quote can
+-- be escaped.
+rawString :: String -> String
+rawString ('\'' : s) = go s where
+  go ('\\' : '\\' : xs) = '\\' : go xs
+  go ('\\' : '\'' : xs) = '\'' : go xs
+  go ('\'' : _) = ""
+  go (x : xs) = x : go xs
+rawString _ = error "rawString: doesn't start with single quote"
 
 }
