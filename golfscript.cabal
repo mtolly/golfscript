@@ -1,0 +1,25 @@
+Name:               golfscript
+Version:            0.0.1
+Synopsis:           Golfscript, a terse programming language by Darren Smith.
+License:            GPL
+Author:             Michael Tolly
+Maintainer:         tolly@wisc.edu
+Build-Type:         Simple
+Cabal-version:      >= 1.8
+Category:           Data
+
+Library
+  Build-Depends:    base, array, hashmap
+                    
+  Exposed-modules:  Language.GolfScript.Base
+                    Language.GolfScript.Scan
+                    Language.GolfScript.Parse
+                    Language.GolfScript.Prelude
+                    
+  hs-source-dirs:   src
+  ghc-options:      -Wall
+
+Executable golf
+  main-is:          golf.hs
+  build-depends:    base, golfscript
+  
