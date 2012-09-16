@@ -45,6 +45,7 @@ rawString ('\'' : s) = go s where
   go ('\\' : '\'' : xs) = '\'' : go xs
   go ('\'' : _) = ""
   go (x : xs) = x : go xs
+  go "" = ""
 rawString _ = error "rawString: doesn't start with single quote"
 
 }

@@ -36,7 +36,8 @@ push x (Golf stk bts vs) = Golf (x : stk) (map (+ 1) bts) vs
 
 pop :: Golf -> Maybe (Val, Golf)
 pop (Golf [] _ _) = Nothing
-pop (Golf (x : xs) bts vrs) = Just (x, Golf xs (map (subtract 1) bts) vrs)
+pop (Golf (x : xs) bts vrs) = Just (x, Golf xs (map sub1 bts) vrs)
+  where sub1 n = max 0 $ n - 1
 
 act :: Do -> Golf -> Golf
 act d g@(Golf _ _ vrs) = case d of

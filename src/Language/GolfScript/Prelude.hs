@@ -51,12 +51,14 @@ bang = unary $ \x -> push' $ Int $ if bool x then 0 else 1
 
 at :: S ()
 at = modify $ \g -> case g of
-  Golf (x:y:z:xs) bts vrs -> Golf (z:x:y:xs) bts vrs
+  Golf (x:y:z:xs) bts vrs -> Golf (z:x:y:xs) (map (max 3) bts) vrs
+  -- "max 3" because it has to behave like we popped 3 and pushed 3.
   _ -> g
 
 backslash :: S ()
 backslash = modify $ \g -> case g of
-  Golf (x:y:xs) bts vrs -> Golf (y:x:xs) bts vrs
+  Golf (x:y:xs) bts vrs -> Golf (y:x:xs) (map (max 2) bts) vrs
+  -- "max 2" because it has to behave like we popped 2 and pushed 2.
   _ -> g
 
 semicolon :: S ()
