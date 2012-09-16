@@ -72,7 +72,7 @@ strToArr = map $ Int . fromEnum'
 
 arrToStr :: [Val m] -> String
 arrToStr = mapMaybe $ \x -> case x of
-  Int i -> Just $ toEnum $ fromIntegral i
+  Int i -> Just $ toEnum' i
   _ -> Nothing
 
 comma :: (Monad m) => S m ()
@@ -111,6 +111,9 @@ unsnoc xs = case reverse xs of
 fromEnum' :: (Enum a, Integral b) => a -> b
 fromEnum' = fromIntegral . fromEnum
 
+toEnum' :: (Integral a, Enum b) => a -> b
+toEnum' = toEnum . fromIntegral
+
 backtick :: (Monad m) => S m ()
 backtick = unary $ \x -> push' $ Str $ uneval [Push x]
 
@@ -123,6 +126,8 @@ dollar = unary $ \x -> case x of
   Str s -> push' $ Str $ sort s
   Blk _ -> undefined -- take a str/arr and sort by mapping
 
+-- | Two values popped off the stack, coerced to the same type. The second
+-- argument to each constructor is the second value popped off.
 data Coerced m
   = Ints Integer Integer
   | Arrs [Val m] [Val m]
@@ -131,7 +136,23 @@ data Coerced m
   deriving (Eq, Ord, Show, Read)
 
 coerce :: (Monad m) => (Coerced m -> S m ()) -> S m ()
-coerce = undefined
+coerce f = unary $ \y -> unary $ \x -> f $ case (x, y) of
+  (Int a, Int b) -> Ints a b
+  (Int _, Arr b) -> Arrs [x] b
+  (Int a, Str b) -> Strs (show a) b
+  (Int _, Blk b) -> Blks [Push x] b
+  (Arr a, Int _) -> Arrs a [y]
+  (Arr a, Arr b) -> Arrs a b
+  (Arr a, Str b) -> Strs (arrToStr a) b
+  (Arr _, Blk _) -> undefined -- TODO
+  (Str a, Int b) -> Strs a (show b)
+  (Str a, Arr b) -> Strs a (arrToStr b)
+  (Str a, Str b) -> Strs a b
+  (Str a, Blk b) -> Blks (parse $ scan a) b
+  (Blk a, Int _) -> Blks a [Push y]
+  (Blk _, Arr _) -> undefined -- TODO
+  (Blk a, Str b) -> Blks a (parse $ scan b)
+  (Blk a, Blk b) -> Blks a b
 
 plus :: (Monad m) => S m ()
 plus = coerce $ \c -> case c of
