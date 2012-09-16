@@ -11,5 +11,5 @@ Under development. Planned features:
   state, filled by either Identity or IO.
 
 * Warnings mode, where warnings could be printed for undefined function
-  applications (incorrect input types) and reading from undefined variables
-  (other than whitespace).
+  applications, writing to whitespace variable names, and reading from undefined
+  variables (other than whitespace).

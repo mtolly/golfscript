@@ -8,6 +8,7 @@ import Data.Bits
 import Control.Monad.Trans.State
 import Control.Monad (void, filterM)
 import Data.Maybe (mapMaybe)
+import Data.List (sort)
 
 type S = State Golf
 
@@ -106,6 +107,15 @@ unsnoc xs = case reverse xs of
 backtick :: S ()
 backtick = unary $ \x -> push' $ Str $ uneval [Push x]
 
+dollar :: S ()
+dollar = unary $ \x -> case x of
+  Int i -> gets stack >>= \stk -> case lookup i (zip [0..] stk) of
+    Nothing -> return ()
+    Just v  -> push' v
+  Arr a -> push' $ Arr $ sort a
+  Str s -> push' $ Str $ sort s
+  Blk _ -> undefined -- take a str/arr and sort by mapping
+
 -- | Represents two values popped off the stack in type priority order.
 -- For two values of equal type, "FooFoo x y" means stack is [x, y, ..]
 data TwoVals
@@ -135,4 +145,5 @@ prelude = empty { vars = M.fromList
   , ("(", prim lp)
   , (")", prim rp)
   , ("`", prim backtick)
+  , ("$", prim dollar)
   ] }
