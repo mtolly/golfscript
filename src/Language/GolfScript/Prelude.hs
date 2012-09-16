@@ -66,11 +66,11 @@ semicolon :: S ()
 semicolon = void pop'
 
 strToArr :: String -> [Val]
-strToArr = map $ Int . fromIntegral . fromEnum
+strToArr = map $ Int . fromEnum'
 
 arrToStr :: [Val] -> String
 arrToStr = mapMaybe $ \x -> case x of
-  Int i -> Just $ toEnum $ fromIntegral $ i
+  Int i -> Just $ toEnum $ fromIntegral i
   _ -> Nothing
 
 comma :: S ()
@@ -91,18 +91,23 @@ lp :: S ()
 lp = unary $ \x -> case x of
   Int i -> push' $ Int $ i - 1
   Arr (v : vs) -> push' (Arr vs) >> push' v
+  Str (c : cs) -> push' (Str cs) >> push' (Int $ fromEnum' c)
   _ -> push' x
 
 rp :: S ()
 rp = unary $ \x -> case x of
   Int i -> push' $ Int $ i + 1
   Arr (unsnoc -> Just (vs, v)) -> push' (Arr vs) >> push' v
+  Str (unsnoc -> Just (cs, c)) -> push' (Str cs) >> push' (Int $ fromEnum' c)
   _ -> push' x
 
 unsnoc :: [a] -> Maybe ([a], a)
 unsnoc xs = case reverse xs of
   y : ys -> Just (reverse ys, y)
   _ -> Nothing
+
+fromEnum' :: (Enum a, Integral b) => a -> b
+fromEnum' = fromIntegral . fromEnum
 
 backtick :: S ()
 backtick = unary $ \x -> push' $ Str $ uneval [Push x]
