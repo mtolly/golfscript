@@ -19,8 +19,7 @@ bool :: Val m -> Bool
 bool x = notElem x [Int 0, Arr [], Str "", Blk []]
 
 pop' :: (Monad m) => S m (Maybe (Val m))
-pop' = gets pop >>= maybe (return Nothing)
-  (\(x, g) -> put g >> return (Just x))
+pop' = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
 
 push' :: (Monad m) => Val m -> S m ()
 push' x = modify (push x)
@@ -124,6 +123,23 @@ dollar = unary $ \x -> case x of
   Str s -> push' $ Str $ sort s
   Blk _ -> undefined -- take a str/arr and sort by mapping
 
+data Coerced m
+  = Ints Integer Integer
+  | Arrs [Val m] [Val m]
+  | Strs String String
+  | Blks [Do m] [Do m]
+  deriving (Eq, Ord, Show, Read)
+
+coerce :: (Monad m) => (Coerced m -> S m ()) -> S m ()
+coerce = undefined
+
+plus :: (Monad m) => S m ()
+plus = coerce $ \c -> case c of
+  Ints x y -> push' $ Int $ x + y
+  Arrs x y -> push' $ Arr $ x ++ y
+  Strs x y -> push' $ Str $ x ++ y
+  Blks x y -> push' $ Blk $ x ++ [Get " "] ++ y
+
 prelude :: (Monad m) => Golf m
 prelude = empty { vars = M.fromList
   [ ("[", prim lb)
@@ -139,4 +155,5 @@ prelude = empty { vars = M.fromList
   , (")", prim rp)
   , ("`", prim backtick)
   , ("$", prim dollar)
+  , ("+", prim plus)
   ] }
