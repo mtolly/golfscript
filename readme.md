@@ -7,9 +7,11 @@ Under development. Planned features:
   string interpolation.
 
 * Pure mode and IO mode, where only IO mode would have things like explicit
-  print commands. Easy to implement as a monad parameter in the interpreter
-  state, filled by either Identity or IO.
+  print commands. Implemented as a monad parameter in the interpreter state,
+  filled by either Identity or IO.
 
-* Warnings mode, where warnings could be printed for undefined function
+* Warnings mode, where warnings can be printed for undefined function
   applications, writing to whitespace variable names, and reading from undefined
   variables (other than whitespace).
+
+* Just as non-strict as Haskell, so you can do things like infinite stacks.
