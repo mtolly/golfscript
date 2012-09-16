@@ -8,12 +8,12 @@ import Data.Bits
 import Control.Monad.Trans.State
 import Control.Monad
 import Data.Maybe (mapMaybe)
-import Data.List (sort)
+import Data.List
 
 type S m = StateT (Golf m) m
 
 modifyM :: (Monad m) => (s -> m s) -> StateT s m ()
-modifyM f = StateT $ \s -> f s >>= \s' -> return ((), s')
+modifyM f = StateT $ f >=> \s' -> return ((), s')
 
 bool :: Val m -> Bool
 bool x = notElem x [Int 0, Arr [], Str "", Blk []]
@@ -161,6 +161,27 @@ plus = coerce $ \c -> case c of
   Strs x y -> push' $ Str $ x ++ y
   Blks x y -> push' $ Blk $ x ++ [Get " "] ++ y
 
+pipe :: (Monad m) => S m ()
+pipe = coerce $ \c -> case c of
+  Ints x y -> push' $ Int $ x .|. y
+  Arrs x y -> push' $ Arr $ union x y
+  Strs x y -> push' $ Str $ union x y
+  Blks _ _ -> undefined -- TODO
+
+ampersand :: (Monad m) => S m ()
+ampersand = coerce $ \c -> case c of
+  Ints x y -> push' $ Int $ x .&. y
+  Arrs x y -> push' $ Arr $ intersect x y
+  Strs x y -> push' $ Str $ intersect x y
+  Blks _ _ -> undefined -- TODO
+
+caret :: (Monad m) => S m ()
+caret = coerce $ \c -> case c of
+  Ints x y -> push' $ Int $ xor x y
+  Arrs x y -> push' $ Arr $ union x y \\ intersect x y
+  Strs x y -> push' $ Str $ union x y \\ intersect x y
+  Blks _ _ -> undefined -- TODO
+
 prelude :: (Monad m) => Golf m
 prelude = empty { vars = M.fromList
   [ ("[", prim lb)
@@ -177,4 +198,7 @@ prelude = empty { vars = M.fromList
   , ("`", prim backtick)
   , ("$", prim dollar)
   , ("+", prim plus)
+  , ("|", prim pipe)
+  , ("&", prim ampersand)
+  , ("^", prim caret)
   ] }
