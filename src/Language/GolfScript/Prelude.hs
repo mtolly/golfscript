@@ -152,7 +152,7 @@ rb = modify $ \(Golf stk bts vrs) -> case bts of
 dot :: (Monad m) => S m ()
 dot = unary $ \x -> spush x >> spush x
 
--- | @~@ bitwise not (int), eval (blk/str), push each (arr)
+-- | @~@ bitwise not (int), eval (blk\/str), push each (arr)
 tilde :: (Monad m) => S m ()
 tilde = unary $ \x -> case x of
   Int i -> spush $ Int $ complement i
@@ -160,11 +160,11 @@ tilde = unary $ \x -> case x of
   Blk b -> modifyM $ runs b
   Str s -> modifyM $ runs $ parse $ scan s
 
--- | @!@ boolean not: if in 0,[],"",{}, push 1. else push 0.
+-- | @!@ boolean not: if in {@0@,@[]@,@\"\"@,@{}@}, push 1. else push 0.
 bang :: (Monad m) => S m ()
 bang = unary $ \x -> spush $ Int $ if bool x then 0 else 1
 
--- | @\@@ bring third value to top: @[x,y,z,...]@ becomes @[z,x,y,...@
+-- | @\@@ bring third value to top: @[x,y,z,...]@ becomes @[z,x,y,...]@
 at :: (Monad m) => S m ()
 at = ternary $ \x y z -> spush y >> spush z >> spush x
 
@@ -176,6 +176,7 @@ backslash = binary $ \x y -> spush y >> spush x
 semicolon :: (Monad m) => S m ()
 semicolon = spop >> return ()
 
+-- | @,@ generate @[0..n]@ (int), length (arr\/str), filter arr\/str by key (blk)
 comma :: (Monad m) => S m ()
 comma = unary $ \x -> case x of
   Int i -> spush $ Arr $ map Int [0 .. i-1]
@@ -189,6 +190,7 @@ comma = unary $ \x -> case x of
     Just (Blk _) -> undefined -- TODO: ???
     Nothing -> spush x -- push the block back on
 
+-- | @(@ decrement (int), uncons from left (arr\/str)
 lp :: (Monad m) => S m ()
 lp = unary $ \x -> case x of
   Int i -> spush $ Int $ i - 1
@@ -196,6 +198,7 @@ lp = unary $ \x -> case x of
   Str (c : cs) -> spush (Str cs) >> spush (Int $ fromEnum' c)
   _ -> spush x
 
+-- | @)@ increment (int), uncons from right (arr\/str)
 rp :: (Monad m) => S m ()
 rp = unary $ \x -> case x of
   Int i -> spush $ Int $ i + 1
