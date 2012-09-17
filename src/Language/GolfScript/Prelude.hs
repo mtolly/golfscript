@@ -11,47 +11,83 @@ import Control.Monad
 import Data.Maybe (mapMaybe)
 import Data.List
 
+-- | Two values popped off the stack, coerced to the same type. For @Foos x y@,
+-- the original stack looked like @[y, x, ...]@.
+data Coerced m
+  = Ints Integer Integer
+  | Arrs [Val m] [Val m]
+  | Strs String String
+  | Blks [Do m] [Do m]
+  deriving (Eq, Ord, Show, Read)
+
+-- | Two values popped off the stack, placed in a standard type-priority order.
+-- For @FooFoo x y@, the original stack looked like @[y, x, ...]@.
+data Ordered m
+  = IntInt Integer Integer
+  | IntArr Integer [Val m]
+  | IntStr Integer String
+  | IntBlk Integer [Do m]
+  | ArrArr [Val m] [Val m]
+  | ArrStr [Val m] String
+  | ArrBlk [Val m] [Do m]
+  | StrStr String String
+  | StrBlk String [Do m]
+  | BlkBlk [Do m] [Do m]
+  deriving (Eq, Ord, Show, Read)
+
 type S m = StateT (Golf m) m
 
-modifyM :: (Monad m) => (s -> m s) -> StateT s m ()
-modifyM f = StateT $ f >=> \s' -> return ((), s')
+-- | Packages a state function as a value that can be assigned to a variable.
+prim :: (Monad m) => S m () -> Val m
+prim s = Blk [Prim $ P $ execStateT s]
+
+--
+-- Helper functions
+--
+
+spush :: (Monad m) => Val m -> S m ()
+spush x = modify (push x)
+
+spop :: (Monad m) => S m (Maybe (Val m))
+spop = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
 
 bool :: Val m -> Bool
 bool x = notElem x [Int 0, Arr [], Str "", Blk []]
 
-pop' :: (Monad m) => S m (Maybe (Val m))
-pop' = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
-
-push' :: (Monad m) => Val m -> S m ()
-push' x = modify (push x)
+modifyM :: (Monad m) => (s -> m s) -> StateT s m ()
+modifyM f = StateT $ f >=> \s' -> return ((), s')
 
 unary :: (Monad m) => (Val m -> S m ()) -> S m ()
-unary f = pop' >>= maybe (return ()) f
+unary f = spop >>= maybe (return ()) f
 
-prim :: (Monad m) => S m () -> Val m
-prim s = Blk [Prim $ P $ execStateT s]
+--
+-- The built-ins
+--
 
+-- | @[@ starts an array \"literal\"
 lb :: (Monad m) => S m ()
 lb = modify $ \(Golf stk bts vrs) -> Golf stk (0 : bts) vrs
 
+-- | @]@ ends an array \"literal\"
 rb :: (Monad m) => S m ()
 rb = modify $ \(Golf stk bts vrs) -> case bts of
   [] -> Golf [Arr $ reverse stk] [] vrs
   b : bs -> case splitAt b stk of
     (stkl, stkr) -> Golf ((Arr $ reverse stkl) : stkr) bs vrs
 
+-- | @.@ duplicates the top value, by 1 pop and 2 pushes
 dot :: (Monad m) => S m ()
-dot = unary $ \x -> push' x >> push' x
+dot = unary $ \x -> spush x >> spush x
 
 tilde :: (Monad m) => S m ()
 tilde = unary $ \x -> case x of
-  Int i -> push' $ Int $ complement i
-  Arr a -> mapM_ push' a
+  Int i -> spush $ Int $ complement i
+  Arr a -> mapM_ spush a
   Blk b -> modifyM $ runs b
   Str s -> modifyM $ runs $ parse $ scan s
 
 bang :: (Monad m) => S m ()
-bang = unary $ \x -> push' $ Int $ if bool x then 0 else 1
+bang = unary $ \x -> spush $ Int $ if bool x then 0 else 1
 
 at :: (Monad m) => S m ()
 at = modify $ \g -> case g of
@@ -66,7 +102,7 @@ backslash = modify $ \g -> case g of
   _ -> g
 
 semicolon :: (Monad m) => S m ()
-semicolon = pop' >> return ()
+semicolon = spop >> return ()
 
 strToArr :: String -> [Val m]
 strToArr = map $ Int . fromEnum'
@@ -78,31 +114,31 @@ arrToStr = mapMaybe $ \x -> case x of
 
 comma :: (Monad m) => S m ()
 comma = unary $ \x -> case x of
-  Int i -> push' $ Arr $ map Int [0 .. i-1]
-  Arr a -> push' $ Int $ fromIntegral $ length a
-  Str s -> push' $ Int $ fromIntegral $ length s
+  Int i -> spush $ Arr $ map Int [0 .. i-1]
+  Arr a -> spush $ Int $ fromIntegral $ length a
+  Str s -> spush $ Int $ fromIntegral $ length s
   Blk b -> unary $ \y -> case y of -- take array a, then: filterBy b a
-    Arr a -> filterM (\v -> push' v >> predicate b) a >>= push' . Arr
-    Str s -> filterM (\v -> push' v >> predicate b) (strToArr s) >>=
-      push' . Str . arrToStr
+    Arr a -> filterM (\v -> spush v >> predicate b) a >>= spush . Arr
+    Str s -> filterM (\v -> spush v >> predicate b) (strToArr s) >>=
+      spush . Str . arrToStr
     _ -> return ()
 
 predicate :: (Monad m) => [Do m] -> S m Bool
-predicate xs = modifyM (runs xs) >> liftM (maybe False bool) pop'
+predicate xs = modifyM (runs xs) >> liftM (maybe False bool) spop
 
 lp :: (Monad m) => S m ()
 lp = unary $ \x -> case x of
-  Int i -> push' $ Int $ i - 1
-  Arr (v : vs) -> push' (Arr vs) >> push' v
-  Str (c : cs) -> push' (Str cs) >> push' (Int $ fromEnum' c)
-  _ -> push' x
+  Int i -> spush $ Int $ i - 1
+  Arr (v : vs) -> spush (Arr vs) >> spush v
+  Str (c : cs) -> spush (Str cs) >> spush (Int $ fromEnum' c)
+  _ -> spush x
 
 rp :: (Monad m) => S m ()
 rp = unary $ \x -> case x of
-  Int i -> push' $ Int $ i + 1
-  Arr (unsnoc -> Just (vs, v)) -> push' (Arr vs) >> push' v
-  Str (unsnoc -> Just (cs, c)) -> push' (Str cs) >> push' (Int $ fromEnum' c)
-  _ -> push' x
+  Int i -> spush $ Int $ i + 1
+  Arr (unsnoc -> Just (vs, v)) -> spush (Arr vs) >> spush v
+  Str (unsnoc -> Just (cs, c)) -> spush (Str cs) >> spush (Int $ fromEnum' c)
+  _ -> spush x
 
 unsnoc :: [a] -> Maybe ([a], a)
 unsnoc xs = case reverse xs of
@@ -116,25 +152,16 @@ toEnum' :: (Integral a, Enum b) => a -> b
 toEnum' = toEnum . fromIntegral
 
 backtick :: (Monad m) => S m ()
-backtick = unary $ \x -> push' $ Str $ uneval [Push x]
+backtick = unary $ \x -> spush $ Str $ uneval [Push x]
 
 dollar :: (Monad m) => S m ()
 dollar = unary $ \x -> case x of
   Int i -> gets stack >>= \stk -> case lookup i (zip [0..] stk) of
     Nothing -> return ()
-    Just v  -> push' v
-  Arr a -> push' $ Arr $ sort a
-  Str s -> push' $ Str $ sort s
+    Just v  -> spush v
+  Arr a -> spush $ Arr $ sort a
+  Str s -> spush $ Str $ sort s
   Blk _ -> undefined -- take a str/arr and sort by mapping
-
--- | Two values popped off the stack, coerced to the same type. The second
--- argument to each constructor is the second value popped off.
-data Coerced m
-  = Ints Integer Integer
-  | Arrs [Val m] [Val m]
-  | Strs String String
-  | Blks [Do m] [Do m]
-  deriving (Eq, Ord, Show, Read)
 
 coerce :: (Monad m) => (Coerced m -> S m ()) -> S m ()
 coerce f = unary $ \y -> unary $ \x -> f $ case (x, y) of
@@ -157,37 +184,37 @@ coerce f = unary $ \y -> unary $ \x -> f $ case (x, y) of
 
 plus :: (Monad m) => S m ()
 plus = coerce $ \c -> case c of
-  Ints x y -> push' $ Int $ x + y
-  Arrs x y -> push' $ Arr $ x ++ y
-  Strs x y -> push' $ Str $ x ++ y
-  Blks x y -> push' $ Blk $ x ++ [Get " "] ++ y
+  Ints x y -> spush $ Int $ x + y
+  Arrs x y -> spush $ Arr $ x ++ y
+  Strs x y -> spush $ Str $ x ++ y
+  Blks x y -> spush $ Blk $ x ++ [Get " "] ++ y
 
 pipe :: (Monad m) => S m ()
 pipe = coerce $ \c -> case c of
-  Ints x y -> push' $ Int $ x .|. y
-  Arrs x y -> push' $ Arr $ union x y
-  Strs x y -> push' $ Str $ union x y
+  Ints x y -> spush $ Int $ x .|. y
+  Arrs x y -> spush $ Arr $ union x y
+  Strs x y -> spush $ Str $ union x y
   Blks _ _ -> undefined -- TODO
 
 ampersand :: (Monad m) => S m ()
 ampersand = coerce $ \c -> case c of
-  Ints x y -> push' $ Int $ x .&. y
-  Arrs x y -> push' $ Arr $ intersect x y
-  Strs x y -> push' $ Str $ intersect x y
+  Ints x y -> spush $ Int $ x .&. y
+  Arrs x y -> spush $ Arr $ intersect x y
+  Strs x y -> spush $ Str $ intersect x y
   Blks _ _ -> undefined -- TODO
 
 caret :: (Monad m) => S m ()
 caret = coerce $ \c -> case c of
-  Ints x y -> push' $ Int $ xor x y
-  Arrs x y -> push' $ Arr $ union x y \\ intersect x y
-  Strs x y -> push' $ Str $ union x y \\ intersect x y
+  Ints x y -> spush $ Int $ xor x y
+  Arrs x y -> spush $ Arr $ union x y \\ intersect x y
+  Strs x y -> spush $ Str $ union x y \\ intersect x y
   Blks _ _ -> undefined -- TODO
 
 minus :: (Monad m) => S m ()
 minus = coerce $ \c -> case c of
-  Ints x y -> push' $ Int $ x - y
-  Arrs x y -> push' $ Arr $ x \\ y
-  Strs x y -> push' $ Str $ x \\ y
+  Ints x y -> spush $ Int $ x - y
+  Arrs x y -> spush $ Arr $ x \\ y
+  Strs x y -> spush $ Str $ x \\ y
   Blks _ _ -> undefined -- TODO
 
 prelude :: (Monad m) => Golf m

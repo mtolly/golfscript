@@ -4,6 +4,7 @@ import qualified Data.HashMap as M
 import Control.Monad
 import Data.List (intersperse)
 
+-- | A value, parametrized by a monad for primitive functions.
 data Val m
   = Int Integer
   | Arr [Val m]
@@ -11,6 +12,7 @@ data Val m
   | Blk [Do m]
   deriving (Eq, Ord, Show, Read)
 
+-- | A program command, parametrized by a monad for primitive functions.
 data Do m
   = Push (Val m) -- ^ Push a value onto the stack.
   | Get String -- ^ Read a variable.
@@ -18,9 +20,9 @@ data Do m
   | Prim (Prim m) -- ^ A primitive built-in function.
   deriving (Eq, Ord, Show, Read)
 
--- | An opaque built-in function. Because of the way the stack works, a program
--- can only execute Prim values; it can never handle them directly.
-newtype Prim m = P (Golf m -> m (Golf m))
+-- | An opaque built-in monadic function. Because of the way the stack works, a
+-- program can only execute Prim values; it can never handle them directly.
+newtype Prim m = P { runP :: (Golf m -> m (Golf m)) }
 instance Eq   (Prim m) where _ == _ = True
 instance Ord  (Prim m) where compare _ _ = EQ
 instance Show (Prim m) where show _ = "<prim>"
@@ -47,7 +49,7 @@ empty = Golf [] [] M.empty
 
 -- | Push a value onto the stack.
 push :: Val m -> Golf m -> Golf m
-push x (Golf stk bts vs) = Golf (x : stk) (map (+ 1) bts) vs
+push x (Golf stk bts vrs) = Golf (x : stk) (map (+ 1) bts) vrs
 
 -- | Pop a value off the stack, or Nothing if the stack is empty.
 pop :: Golf m -> Maybe (Val m, Golf m)
@@ -55,7 +57,7 @@ pop (Golf [] _ _) = Nothing
 pop (Golf (x : xs) bts vrs) = Just (x, Golf xs (map sub1 bts) vrs)
   where sub1 n = max 0 $ n - 1
 
--- | Run a single action.
+-- | Run a single command.
 run :: (Monad m) => Do m -> Golf m -> m (Golf m)
 run d g@(Golf _ _ vrs) = case d of
   Get v -> case M.lookup v vrs of
@@ -68,7 +70,7 @@ run d g@(Golf _ _ vrs) = case d of
   Prim (P f) -> f g
   Push x -> return $ push x g
 
--- | Run a list of actions in sequence.
+-- | Run a list of commands in sequence.
 runs :: (Monad m) => [Do m] -> Golf m -> m (Golf m)
 runs = foldr (>=>) return . map run
 
