@@ -58,8 +58,19 @@ bool x = notElem x [Int 0, Arr [], Str "", Blk []]
 modifyM :: (Monad m) => (s -> m s) -> StateT s m ()
 modifyM f = StateT $ f >=> \s' -> return ((), s')
 
+-- | Pop a value off the stack and use it. If the stack is empty, does nothing.
 unary :: (Monad m) => (Val m -> S m ()) -> S m ()
 unary f = spop >>= maybe (return ()) f
+
+-- | Pop two values off the stack and use them. If there's only one value on the
+-- stack, it's popped back on and nothing is executed.
+binary :: (Monad m) => (Val m -> Val m -> S m ()) -> S m ()
+binary f = unary $ \y -> spop >>= maybe (spush y) (\x -> f x y)
+
+-- | Pop three values off the stack and use them. If there's only one or two
+-- values on the stack, they're popped back on and nothing is executed.
+ternary :: (Monad m) => (Val m -> Val m -> Val m -> S m ()) -> S m ()
+ternary f = binary $ \y z -> spop >>= maybe (spush y >> spush z) (\x -> f x y z)
 
 strToArr :: String -> [Val m]
 strToArr = map $ Int . fromEnum'
@@ -152,16 +163,10 @@ bang :: (Monad m) => S m ()
 bang = unary $ \x -> spush $ Int $ if bool x then 0 else 1
 
 at :: (Monad m) => S m ()
-at = modify $ \g -> case g of
-  Golf (x:y:z:xs) bts vrs -> Golf (z:x:y:xs) (map (max 3) bts) vrs
-  -- "max 3" because it has to behave like we popped 3 and pushed 3.
-  _ -> g
+at = ternary $ \x y z -> spush y >> spush z >> spush x
 
 backslash :: (Monad m) => S m ()
-backslash = modify $ \g -> case g of
-  Golf (x:y:xs) bts vrs -> Golf (y:x:xs) (map (max 2) bts) vrs
-  -- "max 2" because it has to behave like we popped 2 and pushed 2.
-  _ -> g
+backslash = binary $ \x y -> spush y >> spush x
 
 semicolon :: (Monad m) => S m ()
 semicolon = spop >> return ()
