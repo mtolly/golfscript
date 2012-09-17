@@ -39,7 +39,7 @@ data Golf m = Golf
   -- numbers, and the 'pop' command decrements them (while not letting them go
   -- below zero). The right bracket pops a number off this list, 'take's that
   -- many values off the stack, reverses them, and puts them into a new list.
-  , vars :: M.Map String (Val m)
+  , variables :: M.Map String (Val m)
   -- ^ Named variables, stored in a hash table.
   } deriving (Eq, Ord, Show, Read)
 
@@ -64,8 +64,9 @@ run d g@(Golf _ _ vrs) = case d of
     Nothing -> return g -- undefined variable, no effect
     Just (Blk b) -> runs b g -- execute block
     Just x -> return $ push x g -- push x onto stack
-  Set v -> return $ case pop g of
-    Just (x, Golf stk bts _) -> Golf stk bts $ M.insert v x vrs
+  Set v -> return $ case pop g of -- pop a val, push back on, and assign
+    Just (x, g') -> case push x g' of
+      g'' -> g'' { variables = M.insert v x vrs }
     Nothing -> g
   Prim (P f) -> f g
   Push x -> return $ push x g

@@ -258,7 +258,7 @@ minus = coerce $ \c -> case c of
 --
 
 prelude :: (Monad m) => Golf m
-prelude = empty { vars = M.fromList
+prelude = empty { variables = M.fromList
   [ ("[", prim lb)
   , ("]", prim rb)
   , (".", prim dot)
