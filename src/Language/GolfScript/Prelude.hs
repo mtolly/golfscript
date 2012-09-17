@@ -103,6 +103,25 @@ coerce f = unary $ \y -> unary $ \x -> f $ case (x, y) of
   (Blk a, Str b) -> Blks a (parse $ scan b)
   (Blk a, Blk b) -> Blks a b
 
+order :: (Monad m) => (Ordered m -> S m ()) -> S m ()
+order f = unary $ \y -> unary $ \x -> f $ case (x, y) of
+  (Int a, Int b) -> IntInt a b
+  (Int a, Arr b) -> IntArr a b
+  (Int a, Str b) -> IntStr a b
+  (Int a, Blk b) -> IntBlk a b
+  (Arr a, Int b) -> IntArr b a
+  (Arr a, Arr b) -> ArrArr a b
+  (Arr a, Str b) -> ArrStr a b
+  (Arr a, Blk b) -> ArrBlk a b
+  (Str a, Int b) -> IntStr b a
+  (Str a, Arr b) -> ArrStr b a
+  (Str a, Str b) -> StrStr a b
+  (Str a, Blk b) -> StrBlk a b
+  (Blk a, Int b) -> IntBlk b a
+  (Blk a, Arr b) -> ArrBlk b a
+  (Blk a, Str b) -> StrBlk b a
+  (Blk a, Blk b) -> BlkBlk a b
+
 --
 -- The built-ins
 --

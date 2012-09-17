@@ -79,6 +79,7 @@ runs = foldr (>=>) return . map run
 -- hasn't been assigned a value.
 uneval :: [Do m] -> String
 uneval = concatMap go . intersperse (Get " ") where
+  -- todo: avoid putting unnecessary space chars in?
   go d = case d of
     Get x -> x
     Set x -> ':' : x
