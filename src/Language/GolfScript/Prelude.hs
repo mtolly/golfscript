@@ -1,4 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
+{- | The standard set of built-in functions included with GolfScript. -}
 module Language.GolfScript.Prelude where
 
 import Language.GolfScript.Base
@@ -46,8 +47,8 @@ tilde :: (Monad m) => S m ()
 tilde = unary $ \x -> case x of
   Int i -> push' $ Int $ complement i
   Arr a -> mapM_ push' a
-  Blk b -> modifyM $ exec b
-  Str s -> modifyM $ exec $ parse $ scan s
+  Blk b -> modifyM $ runs b
+  Str s -> modifyM $ runs $ parse $ scan s
 
 bang :: (Monad m) => S m ()
 bang = unary $ \x -> push' $ Int $ if bool x then 0 else 1
@@ -87,7 +88,7 @@ comma = unary $ \x -> case x of
     _ -> return ()
 
 predicate :: (Monad m) => [Do m] -> S m Bool
-predicate xs = modifyM (exec xs) >> liftM (maybe False bool) pop'
+predicate xs = modifyM (runs xs) >> liftM (maybe False bool) pop'
 
 lp :: (Monad m) => S m ()
 lp = unary $ \x -> case x of
@@ -182,6 +183,13 @@ caret = coerce $ \c -> case c of
   Strs x y -> push' $ Str $ union x y \\ intersect x y
   Blks _ _ -> undefined -- TODO
 
+minus :: (Monad m) => S m ()
+minus = coerce $ \c -> case c of
+  Ints x y -> push' $ Int $ x - y
+  Arrs x y -> push' $ Arr $ x \\ y
+  Strs x y -> push' $ Str $ x \\ y
+  Blks _ _ -> undefined -- TODO
+
 prelude :: (Monad m) => Golf m
 prelude = empty { vars = M.fromList
   [ ("[", prim lb)
@@ -201,4 +209,5 @@ prelude = empty { vars = M.fromList
   , ("|", prim pipe)
   , ("&", prim ampersand)
   , ("^", prim caret)
+  , ("-", prim minus)
   ] }

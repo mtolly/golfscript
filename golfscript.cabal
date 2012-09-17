@@ -1,6 +1,6 @@
 Name:               golfscript
 Version:            0.0.1
-Synopsis:           Golfscript, a terse programming language by Darren Smith.
+Synopsis:           GolfScript, a terse programming language by Darren Smith.
 License:            GPL
 Author:             Michael Tolly
 Maintainer:         tolly@wisc.edu
@@ -22,4 +22,3 @@ Library
 Executable golf
   main-is:          golf.hs
   build-depends:    base, golfscript, transformers
-  

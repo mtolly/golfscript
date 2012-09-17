@@ -1,5 +1,6 @@
 {
 {-# OPTIONS_GHC -w #-}
+{- | Generated scanner for GolfScript programs -}
 module Language.GolfScript.Scan (scan, Token(..)) where
 }
 
@@ -16,10 +17,10 @@ tokens :-
 \{ { const LBrace }
 \} { const RBrace }
 
-\-? $digit+                       { Num . read }
+\-? $digit+                       { IntLit . read }
 $alphascore ($alphascore|$digit)+ { Var }
-\" (\\ . | [^\\\"])* \"           { String . read }
-\' (\\ . | [^\\\'])* \'           { String . rawString }
+\" (\\ . | [^\\\"])* \"           { StrLit . read }
+\' (\\ . | [^\\\'])* \'           { StrLit . rawString }
 
 . { Var }
 
@@ -27,13 +28,15 @@ $alphascore ($alphascore|$digit)+ { Var }
 
 data Token
   = Var String
-  | Num Integer
-  | String String
+  | IntLit Integer
+  | StrLit String
   | LBrace
   | RBrace
   | Colon
   deriving (Eq, Ord, Show, Read)
 
+-- | As it turns out, this function will never raise an error, because any
+-- character by itself can be lexed as a variable read.
 scan :: String -> [Token]
 scan = alexScanTokens
 

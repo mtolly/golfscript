@@ -1,5 +1,8 @@
-GolfScript interpreter in Haskell, by Michael Tolly
-===================================================
+GolfScript interpreter in Haskell
+=================================
+
+By Michael Tolly
+----------------
 
 Under development. Planned features:
 

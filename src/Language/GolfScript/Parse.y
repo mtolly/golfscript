@@ -1,5 +1,6 @@
 {
-module Language.GolfScript.Parse (scan, parse) where
+{- | Generated parser for GolfScript programs -}
+module Language.GolfScript.Parse (scan, parse, Token(..)) where
 
 import Language.GolfScript.Base
 import Language.GolfScript.Scan
@@ -11,8 +12,8 @@ import Language.GolfScript.Scan
 
 %token
   var { Var $$ }
-  num { Num $$ }
-  str { String $$ }
+  int { IntLit $$ }
+  str { StrLit $$ }
   '{' { LBrace }
   '}' { RBrace }
   ':' { Colon }
@@ -22,7 +23,7 @@ import Language.GolfScript.Scan
 DoList : Do DoList { $1 : $2 }
        | { [] }
 
-Do : num { Push (Int $1) }
+Do : int { Push (Int $1) }
    | str { Push (Str $1) }
    | var { Get $1 }
    | ':' var { Set $2 }
