@@ -51,6 +51,7 @@ spush x = modify (push x)
 spop :: (Monad m) => S m (Maybe (Val m))
 spop = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
 
+-- | False values are the number 0, and the empty array/string/block.
 bool :: Val m -> Bool
 bool x = notElem x [Int 0, Arr [], Str "", Blk []]
 
@@ -59,6 +60,48 @@ modifyM f = StateT $ f >=> \s' -> return ((), s')
 
 unary :: (Monad m) => (Val m -> S m ()) -> S m ()
 unary f = spop >>= maybe (return ()) f
+
+strToArr :: String -> [Val m]
+strToArr = map $ Int . fromEnum'
+
+arrToStr :: [Val m] -> String
+arrToStr = mapMaybe $ \x -> case x of
+  Int i -> Just $ toEnum' i
+  _ -> Nothing
+
+-- | Runs a command sequence, then pops a value off and evaluates it for truth.
+predicate :: (Monad m) => [Do m] -> S m Bool
+predicate xs = modifyM (runs xs) >> liftM (maybe False bool) spop
+
+unsnoc :: [a] -> Maybe ([a], a)
+unsnoc xs = case reverse xs of
+  y : ys -> Just (reverse ys, y)
+  _ -> Nothing
+
+fromEnum' :: (Enum a, Integral b) => a -> b
+fromEnum' = fromIntegral . fromEnum
+
+toEnum' :: (Integral a, Enum b) => a -> b
+toEnum' = toEnum . fromIntegral
+
+coerce :: (Monad m) => (Coerced m -> S m ()) -> S m ()
+coerce f = unary $ \y -> unary $ \x -> f $ case (x, y) of
+  (Int a, Int b) -> Ints a b
+  (Int _, Arr b) -> Arrs [x] b
+  (Int a, Str b) -> Strs (show a) b
+  (Int _, Blk b) -> Blks [Push x] b
+  (Arr a, Int _) -> Arrs a [y]
+  (Arr a, Arr b) -> Arrs a b
+  (Arr a, Str b) -> Strs (arrToStr a) b
+  (Arr _, Blk _) -> undefined -- TODO
+  (Str a, Int b) -> Strs a (show b)
+  (Str a, Arr b) -> Strs a (arrToStr b)
+  (Str a, Str b) -> Strs a b
+  (Str a, Blk b) -> Blks (parse $ scan a) b
+  (Blk a, Int _) -> Blks a [Push y]
+  (Blk _, Arr _) -> undefined -- TODO
+  (Blk a, Str b) -> Blks a (parse $ scan b)
+  (Blk a, Blk b) -> Blks a b
 
 --
 -- The built-ins
@@ -104,14 +147,6 @@ backslash = modify $ \g -> case g of
 semicolon :: (Monad m) => S m ()
 semicolon = spop >> return ()
 
-strToArr :: String -> [Val m]
-strToArr = map $ Int . fromEnum'
-
-arrToStr :: [Val m] -> String
-arrToStr = mapMaybe $ \x -> case x of
-  Int i -> Just $ toEnum' i
-  _ -> Nothing
-
 comma :: (Monad m) => S m ()
 comma = unary $ \x -> case x of
   Int i -> spush $ Arr $ map Int [0 .. i-1]
@@ -122,9 +157,6 @@ comma = unary $ \x -> case x of
     Str s -> filterM (\v -> spush v >> predicate b) (strToArr s) >>=
       spush . Str . arrToStr
     _ -> return ()
-
-predicate :: (Monad m) => [Do m] -> S m Bool
-predicate xs = modifyM (runs xs) >> liftM (maybe False bool) spop
 
 lp :: (Monad m) => S m ()
 lp = unary $ \x -> case x of
@@ -140,17 +172,6 @@ rp = unary $ \x -> case x of
   Str (unsnoc -> Just (cs, c)) -> spush (Str cs) >> spush (Int $ fromEnum' c)
   _ -> spush x
 
-unsnoc :: [a] -> Maybe ([a], a)
-unsnoc xs = case reverse xs of
-  y : ys -> Just (reverse ys, y)
-  _ -> Nothing
-
-fromEnum' :: (Enum a, Integral b) => a -> b
-fromEnum' = fromIntegral . fromEnum
-
-toEnum' :: (Integral a, Enum b) => a -> b
-toEnum' = toEnum . fromIntegral
-
 backtick :: (Monad m) => S m ()
 backtick = unary $ \x -> spush $ Str $ uneval [Push x]
 
@@ -162,25 +183,6 @@ dollar = unary $ \x -> case x of
   Arr a -> spush $ Arr $ sort a
   Str s -> spush $ Str $ sort s
   Blk _ -> undefined -- take a str/arr and sort by mapping
-
-coerce :: (Monad m) => (Coerced m -> S m ()) -> S m ()
-coerce f = unary $ \y -> unary $ \x -> f $ case (x, y) of
-  (Int a, Int b) -> Ints a b
-  (Int _, Arr b) -> Arrs [x] b
-  (Int a, Str b) -> Strs (show a) b
-  (Int _, Blk b) -> Blks [Push x] b
-  (Arr a, Int _) -> Arrs a [y]
-  (Arr a, Arr b) -> Arrs a b
-  (Arr a, Str b) -> Strs (arrToStr a) b
-  (Arr _, Blk _) -> undefined -- TODO
-  (Str a, Int b) -> Strs a (show b)
-  (Str a, Arr b) -> Strs a (arrToStr b)
-  (Str a, Str b) -> Strs a b
-  (Str a, Blk b) -> Blks (parse $ scan a) b
-  (Blk a, Int _) -> Blks a [Push y]
-  (Blk _, Arr _) -> undefined -- TODO
-  (Blk a, Str b) -> Blks a (parse $ scan b)
-  (Blk a, Blk b) -> Blks a b
 
 plus :: (Monad m) => S m ()
 plus = coerce $ \c -> case c of
@@ -216,6 +218,10 @@ minus = coerce $ \c -> case c of
   Arrs x y -> spush $ Arr $ x \\ y
   Strs x y -> spush $ Str $ x \\ y
   Blks _ _ -> undefined -- TODO
+
+--
+-- And finally, the initial state with built-in functions
+--
 
 prelude :: (Monad m) => Golf m
 prelude = empty { vars = M.fromList

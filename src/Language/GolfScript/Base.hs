@@ -41,7 +41,7 @@ data Golf m = Golf
   -- many values off the stack, reverses them, and puts them into a new list.
   , vars :: M.Map String (Val m)
   -- ^ Named variables, stored in a hash table.
-  } deriving (Eq, Show, Read)
+  } deriving (Eq, Ord, Show, Read)
 
 -- | An initial state with an empty stack and no predefined variables.
 empty :: Golf m
