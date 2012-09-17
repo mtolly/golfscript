@@ -152,6 +152,7 @@ rb = modify $ \(Golf stk bts vrs) -> case bts of
 dot :: (Monad m) => S m ()
 dot = unary $ \x -> spush x >> spush x
 
+-- | @~@ bitwise not (int), eval (blk/str), push each (arr)
 tilde :: (Monad m) => S m ()
 tilde = unary $ \x -> case x of
   Int i -> spush $ Int $ complement i
@@ -159,15 +160,19 @@ tilde = unary $ \x -> case x of
   Blk b -> modifyM $ runs b
   Str s -> modifyM $ runs $ parse $ scan s
 
+-- | @!@ boolean not: if in 0,[],"",{}, push 1. else push 0.
 bang :: (Monad m) => S m ()
 bang = unary $ \x -> spush $ Int $ if bool x then 0 else 1
 
+-- | @\@@ bring third value to top: @[x,y,z,...]@ becomes @[z,x,y,...@
 at :: (Monad m) => S m ()
 at = ternary $ \x y z -> spush y >> spush z >> spush x
 
+-- | @\\@ swap top two elements: @[x,y,...]@ becomes @[y,x,...]@
 backslash :: (Monad m) => S m ()
 backslash = binary $ \x y -> spush y >> spush x
 
+-- | @;@ pop and discard top element
 semicolon :: (Monad m) => S m ()
 semicolon = spop >> return ()
 
@@ -180,7 +185,9 @@ comma = unary $ \x -> case x of
     Just (Arr a) -> filterM (\v -> spush v >> predicate b) a >>= spush . Arr
     Just (Str s) -> filterM (\v -> spush v >> predicate b) (strToArr s) >>=
       spush . Str . arrToStr
-    _ -> spush $ Blk b
+    Just (Int _) -> undefined -- TODO: filter single int?
+    Just (Blk _) -> undefined -- TODO: ???
+    Nothing -> spush x -- push the block back on
 
 lp :: (Monad m) => S m ()
 lp = unary $ \x -> case x of
@@ -206,7 +213,7 @@ dollar = unary $ \x -> case x of
     Just v  -> spush v
   Arr a -> spush $ Arr $ sort a
   Str s -> spush $ Str $ sort s
-  Blk _ -> undefined -- take a str/arr and sort by mapping
+  Blk _ -> undefined -- TODO: take a str/arr and sort by mapping
 
 plus :: (Monad m) => S m ()
 plus = coerce $ \c -> case c of
@@ -220,28 +227,28 @@ pipe = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .|. y
   Arrs x y -> spush $ Arr $ union x y
   Strs x y -> spush $ Str $ union x y
-  Blks _ _ -> undefined -- TODO
+  Blks _ _ -> undefined -- TODO: ???
 
 ampersand :: (Monad m) => S m ()
 ampersand = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .&. y
   Arrs x y -> spush $ Arr $ intersect x y
   Strs x y -> spush $ Str $ intersect x y
-  Blks _ _ -> undefined -- TODO
+  Blks _ _ -> undefined -- TODO: ???
 
 caret :: (Monad m) => S m ()
 caret = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ xor x y
   Arrs x y -> spush $ Arr $ union x y \\ intersect x y
   Strs x y -> spush $ Str $ union x y \\ intersect x y
-  Blks _ _ -> undefined -- TODO
+  Blks _ _ -> undefined -- TODO: ???
 
 minus :: (Monad m) => S m ()
 minus = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x - y
   Arrs x y -> spush $ Arr $ x \\ y
   Strs x y -> spush $ Str $ x \\ y
-  Blks _ _ -> undefined -- TODO
+  Blks _ _ -> undefined -- TODO: ???
 
 --
 -- And finally, the initial state with built-in functions
