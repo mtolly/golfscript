@@ -96,7 +96,7 @@ toEnum' :: (Integral a, Enum b) => a -> b
 toEnum' = toEnum . fromIntegral
 
 coerce :: (Monad m) => (Coerced m -> S m ()) -> S m ()
-coerce f = unary $ \y -> unary $ \x -> f $ case (x, y) of
+coerce f = binary $ \x y -> f $ case (x, y) of
   (Int a, Int b) -> Ints a b
   (Int _, Arr b) -> Arrs [x] b
   (Int a, Str b) -> Strs (show a) b
@@ -115,7 +115,7 @@ coerce f = unary $ \y -> unary $ \x -> f $ case (x, y) of
   (Blk a, Blk b) -> Blks a b
 
 order :: (Monad m) => (Ordered m -> S m ()) -> S m ()
-order f = unary $ \y -> unary $ \x -> f $ case (x, y) of
+order f = binary $ \x y -> f $ case (x, y) of
   (Int a, Int b) -> IntInt a b
   (Int a, Arr b) -> IntArr a b
   (Int a, Str b) -> IntStr a b
@@ -176,11 +176,11 @@ comma = unary $ \x -> case x of
   Int i -> spush $ Arr $ map Int [0 .. i-1]
   Arr a -> spush $ Int $ fromIntegral $ length a
   Str s -> spush $ Int $ fromIntegral $ length s
-  Blk b -> unary $ \y -> case y of -- take array a, then: filterBy b a
-    Arr a -> filterM (\v -> spush v >> predicate b) a >>= spush . Arr
-    Str s -> filterM (\v -> spush v >> predicate b) (strToArr s) >>=
+  Blk b -> spop >>= \mb -> case mb of -- take array a, then: filterBy b a
+    Just (Arr a) -> filterM (\v -> spush v >> predicate b) a >>= spush . Arr
+    Just (Str s) -> filterM (\v -> spush v >> predicate b) (strToArr s) >>=
       spush . Str . arrToStr
-    _ -> return ()
+    _ -> spush $ Blk b
 
 lp :: (Monad m) => S m ()
 lp = unary $ \x -> case x of

@@ -22,7 +22,7 @@ data Do m
 
 -- | An opaque built-in monadic function. Because of the way the stack works, a
 -- program can only execute Prim values; it can never handle them directly.
-newtype Prim m = P { runP :: (Golf m -> m (Golf m)) }
+newtype Prim m = P { runP :: Golf m -> m (Golf m) }
 instance Eq   (Prim m) where _ == _ = True
 instance Ord  (Prim m) where compare _ _ = EQ
 instance Show (Prim m) where show _ = "<prim>"
