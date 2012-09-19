@@ -211,9 +211,12 @@ rp = unary $ \x -> case x of
   Str (unsnoc -> Just (cs, c)) -> spush (Str cs) >> spush (Int $ c2i c)
   _ -> spush x
 
+-- | @`@ uneval: convert a value to the code which generates that value
 backtick :: (Monad m) => S m ()
 backtick = unary $ \x -> spush $ Str $ uneval [Push x]
 
+-- | @$@ copy nth item from stack (int), sort (arr\/str), take str\/ arr and
+-- sort by mapping (blk)
 dollar :: (Monad m) => S m ()
 dollar = unary $ \x -> case x of
   Int i -> gets stack >>= \stk -> case lookup i (zip [0..] stk) of
@@ -223,6 +226,7 @@ dollar = unary $ \x -> case x of
   Str s -> spush $ Str $ sort s
   Blk _ -> undefined -- TODO: take a str/arr and sort by mapping
 
+-- | @+@ coerce: add (ints), concat (arrs\/strs\/blks)
 plus :: (Monad m) => S m ()
 plus = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x + y
@@ -230,6 +234,7 @@ plus = coerce $ \c -> case c of
   Strs x y -> spush $ Str $ x ++ y
   Blks x y -> spush $ Blk $ x ++ [Get " "] ++ y
 
+-- | @|@: bitwise or (ints), setwise or (arr\/strs\/blks)
 pipe :: (Monad m) => S m ()
 pipe = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .|. y
