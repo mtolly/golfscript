@@ -8,7 +8,7 @@ import qualified Data.HashMap as M
 import Data.Bits
 import Control.Monad.Trans.State
 import Control.Monad
-import Data.Maybe (mapMaybe)
+import Data.Maybe
 import Data.List
 import Data.List.Split
 
@@ -56,6 +56,9 @@ spop = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
 bool :: Val m -> Bool
 bool x = notElem x [Int 0, Arr [], Str "", Blk []]
 
+unbool :: Bool -> Val m
+unbool b = Int $ if b then 1 else 0
+
 modifyM :: (Monad m) => (s -> m s) -> StateT s m ()
 modifyM f = StateT $ f >=> \s' -> return ((), s')
 
@@ -74,11 +77,11 @@ ternary :: (Monad m) => (Val m -> Val m -> Val m -> S m ()) -> S m ()
 ternary f = binary $ \y z -> spop >>= maybe (spush y >> spush z) (\x -> f x y z)
 
 strToArr :: String -> [Val m]
-strToArr = map $ Int . fromEnum'
+strToArr = map $ Int . c2i
 
 arrToStr :: [Val m] -> String
 arrToStr = mapMaybe $ \x -> case x of
-  Int i -> Just $ toEnum' i
+  Int i -> Just $ i2c i
   _ -> Nothing
 
 -- | Runs a command sequence, then pops a value off and evaluates it for truth.
@@ -90,11 +93,11 @@ unsnoc xs = case reverse xs of
   y : ys -> Just (reverse ys, y)
   _ -> Nothing
 
-fromEnum' :: (Enum a, Integral b) => a -> b
-fromEnum' = fromIntegral . fromEnum
+c2i :: Char -> Integer
+c2i = fromIntegral . fromEnum
 
-toEnum' :: (Integral a, Enum b) => a -> b
-toEnum' = toEnum . fromIntegral
+i2c :: Integer -> Char
+i2c = toEnum . fromIntegral
 
 coerce :: (Monad m) => (Coerced m -> S m ()) -> S m ()
 coerce f = binary $ \x y -> f $ case (x, y) of
@@ -187,16 +190,17 @@ comma = unary $ \x -> case x of
     Just (Arr a) -> filterM (\v -> spush v >> predicate b) a >>= spush . Arr
     Just (Str s) -> filterM (\v -> spush v >> predicate b) (strToArr s) >>=
       spush . Str . arrToStr
-    Just (Int _) -> undefined -- TODO: filter single int?
+    Just (Int _) -> undefined -- .rb error
+      -- maybe, filter single int?
     Just (Blk _) -> undefined -- TODO: ???
-    Nothing -> spush x -- push the block back on
+    Nothing -> spush x -- .rb error
 
 -- | @(@ decrement (int), uncons from left (arr\/str)
 lp :: (Monad m) => S m ()
 lp = unary $ \x -> case x of
   Int i -> spush $ Int $ i - 1
   Arr (v : vs) -> spush (Arr vs) >> spush v
-  Str (c : cs) -> spush (Str cs) >> spush (Int $ fromEnum' c)
+  Str (c : cs) -> spush (Str cs) >> spush (Int $ c2i c)
   _ -> spush x
 
 -- | @)@ increment (int), uncons from right (arr\/str)
@@ -204,7 +208,7 @@ rp :: (Monad m) => S m ()
 rp = unary $ \x -> case x of
   Int i -> spush $ Int $ i + 1
   Arr (unsnoc -> Just (vs, v)) -> spush (Arr vs) >> spush v
-  Str (unsnoc -> Just (cs, c)) -> spush (Str cs) >> spush (Int $ fromEnum' c)
+  Str (unsnoc -> Just (cs, c)) -> spush (Str cs) >> spush (Int $ c2i c)
   _ -> spush x
 
 backtick :: (Monad m) => S m ()
@@ -263,10 +267,10 @@ star = order $ \o -> case o of
   ArrArr _ _ -> undefined -- TODO: join
   ArrStr _ _ -> undefined -- TODO: join
     -- Note that 'str arr *' will reorder to 'arr str *'.
-  ArrBlk _ _ -> undefined -- TODO: fold
   StrStr x y -> spush $ Str $ intercalate y $ map (:"") x
+  ArrBlk _ _ -> undefined -- TODO: fold
   StrBlk _ _ -> undefined -- TODO: fold
-  BlkBlk _ y -> mapM_ (spush . Int . fromEnum') $ uneval y
+  BlkBlk _ y -> mapM_ (spush . Int . c2i) $ uneval y
     -- convert y to str, push each char int to stack ???
     -- {anything}{abc}* ==> [97 98 99]
     -- probably a bug, but we're gonna copy it :D
@@ -280,8 +284,8 @@ slash = order $ \o -> case o of
   ArrArr x y -> spush $ Arr $ map Arr $ splitOn y x
   ArrStr x y -> spush $ Arr $ map Arr $ splitOn (strToArr y) x
     -- Note that 'str arr /' will reorder to 'arr str /'.
-  ArrBlk x y -> forM_ x $ \v -> spush v >> modifyM (runs y)
   StrStr x y -> spush $ Arr $ map Str $ splitOn y x
+  ArrBlk x y -> forM_ x $ \v -> spush v >> modifyM (runs y)
   StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> modifyM (runs y)
   BlkBlk _ _ -> undefined -- TODO: unfold
 
@@ -293,22 +297,54 @@ percent = order $ \o -> case o of
   IntBlk _ _ -> undefined -- TODO: ???
   ArrArr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn y x
   ArrStr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn (strToArr y) x
-  ArrBlk x y -> lb >> forM_ x (\v -> spush v >> modifyM (runs y)) >> rb
   StrStr x y -> spush $ Arr $ map Str $ filter (not . null) $ splitOn y x
+  ArrBlk x y -> lb >> forM_ x (\v -> spush v >> modifyM (runs y)) >> rb
   StrBlk x y -> lb >> forM_ (strToArr x) (\v -> spush v >> modifyM (runs y)) >> rb
   BlkBlk _ _ -> undefined -- TODO: ???
 
 less :: (Monad m) => S m ()
-less = undefined -- TODO
+less = order $ \o -> case o of
+  IntInt x y -> spush $ unbool $ x < y
+  ArrArr x y -> spush $ unbool $ x < y
+  StrStr x y -> spush $ unbool $ x < y
+  BlkBlk x y -> spush $ unbool $ uneval x < uneval y
+  _ -> undefined -- TODO
 
 greater :: (Monad m) => S m ()
-greater = undefined -- TODO
+greater = order $ \o -> case o of
+  IntInt x y -> spush $ unbool $ x > y
+  ArrArr x y -> spush $ unbool $ x > y
+  StrStr x y -> spush $ unbool $ x > y
+  BlkBlk x y -> spush $ unbool $ uneval x > uneval y
+  _ -> undefined -- TODO
 
 equal :: (Monad m) => S m ()
-equal = undefined -- TODO
+equal = order $ \o -> case o of
+  -- For same types, test for equal.
+  IntInt x y -> spush $ unbool $ x == y
+  ArrArr x y -> spush $ unbool $ x == y
+  StrStr x y -> spush $ unbool $ x == y
+  BlkBlk x y -> spush $ unbool $ uneval x == uneval y
+  ArrStr x y -> spush $ unbool $ x == strToArr y
+  StrBlk x y -> spush $ unbool $ x == uneval y
+  -- For int and sequence, get at index.
+  IntArr x y -> maybe (return ()) spush $ lookup x $ zip [0..] y
+  IntStr x y -> maybe (return ()) (spush . Int . c2i) $
+    lookup x $ zip [0..] y
+  IntBlk x y -> maybe (return ()) (spush . Int . c2i) $
+    lookup x $ zip [0..] $ uneval y
+  -- TODO: ???
+  ArrBlk _ _ -> undefined
 
 question :: (Monad m) => S m ()
-question = undefined -- TODO
+question = order $ \o -> case o of
+  -- For two ints, exponent.
+  IntInt x y -> spush $ Int $ x ^ y
+  -- For int and seq, find element and push index.
+  IntArr x y -> spush $ Int $ fromMaybe (-1) $ lookup (Int x) $ zip y [0..]
+  IntStr x y -> spush $ Int $ fromMaybe (-1) $ lookup (i2c x) $ zip y [0..]
+  -- For seq and blk, find element and push index.
+  _ -> undefined -- TODO
 
 --
 -- And finally, the initial state with built-in functions

@@ -53,20 +53,21 @@ push x (Golf stk bts vrs) = Golf (x : stk) (map (+ 1) bts) vrs
 
 -- | Pop a value off the stack, or Nothing if the stack is empty.
 pop :: Golf m -> Maybe (Val m, Golf m)
-pop (Golf [] _ _) = Nothing
-pop (Golf (x : xs) bts vrs) = Just (x, Golf xs (map sub1 bts) vrs)
-  where sub1 n = max 0 $ n - 1
+pop g = case stack g of
+  [] -> Nothing
+  (x : xs) -> Just (x, g { stack = xs, brackets = map sub1 $ brackets g })
+    where sub1 n = max 0 $ n - 1
 
 -- | Run a single command.
 run :: (Monad m) => Do m -> Golf m -> m (Golf m)
-run d g@(Golf _ _ vrs) = case d of
-  Get v -> case M.lookup v vrs of
+run d g = case d of
+  Get v -> case M.lookup v $ variables g of
     Nothing -> return g -- undefined variable, no effect
     Just (Blk b) -> runs b g -- execute block
     Just x -> return $ push x g -- push x onto stack
   Set v -> return $ case pop g of -- pop a val, push back on, and assign
     Just (x, g') -> case push x g' of
-      g'' -> g'' { variables = M.insert v x vrs }
+      g'' -> g'' { variables = M.insert v x $ variables g }
     Nothing -> g
   Prim (P f) -> f g
   Push x -> return $ push x g
