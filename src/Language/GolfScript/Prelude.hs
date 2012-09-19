@@ -10,6 +10,7 @@ import Control.Monad.Trans.State
 import Control.Monad
 import Data.Maybe (mapMaybe)
 import Data.List
+import Data.List.Split
 
 -- | Two values popped off the stack, coerced to the same type. For @Foos x y@,
 -- the original stack looked like @[y, x, ...]@.
@@ -160,15 +161,15 @@ tilde = unary $ \x -> case x of
   Blk b -> modifyM $ runs b
   Str s -> modifyM $ runs $ parse $ scan s
 
--- | @!@ boolean not: if in {@0@,@[]@,@\"\"@,@{}@}, push 1. else push 0.
+-- | @!@ boolean not: if in {@0@, @[]@, @\"\"@, @{}@}, push 1. else push 0.
 bang :: (Monad m) => S m ()
 bang = unary $ \x -> spush $ Int $ if bool x then 0 else 1
 
--- | @\@@ bring third value to top: @[x,y,z,...]@ becomes @[z,x,y,...]@
+-- | @\@@ bring third value to top: @[z, y, x, ...]@ becomes @[x, z, y, ...]@
 at :: (Monad m) => S m ()
 at = ternary $ \x y z -> spush y >> spush z >> spush x
 
--- | @\\@ swap top two elements: @[x,y,...]@ becomes @[y,x,...]@
+-- | @\\@ swap top two elements: @[y, x, ...]@ becomes @[x, y, ...]@
 backslash :: (Monad m) => S m ()
 backslash = binary $ \x y -> spush y >> spush x
 
@@ -253,6 +254,62 @@ minus = coerce $ \c -> case c of
   Strs x y -> spush $ Str $ x \\ y
   Blks _ _ -> undefined -- TODO: ???
 
+star :: (Monad m) => S m ()
+star = order $ \o -> case o of
+  IntInt x y -> spush $ Int $ x * y
+  IntBlk x y -> modifyM $ runs $ concat $ genericReplicate x y
+  IntArr x y -> spush $ Arr $ concat $ genericReplicate x y
+  IntStr x y -> spush $ Str $ concat $ genericReplicate x y
+  ArrArr _ _ -> undefined -- TODO: join
+  ArrStr _ _ -> undefined -- TODO: join
+    -- Note that 'str arr *' will reorder to 'arr str *'.
+  ArrBlk _ _ -> undefined -- TODO: fold
+  StrStr x y -> spush $ Str $ intercalate y $ map (:"") x
+  StrBlk _ _ -> undefined -- TODO: fold
+  BlkBlk _ y -> mapM_ (spush . Int . fromEnum') $ uneval y
+    -- convert y to str, push each char int to stack ???
+    -- {anything}{abc}* ==> [97 98 99]
+    -- probably a bug, but we're gonna copy it :D
+
+slash :: (Monad m) => S m ()
+slash = order $ \o -> case o of
+  IntInt x y -> spush $ Int $ div x y
+  IntArr x y -> spush $ Arr $ map Arr $ chunksOf (fromIntegral x) y
+  IntStr x y -> spush $ Arr $ map Str $ chunksOf (fromIntegral x) y
+  IntBlk _ _ -> undefined -- TODO: ???
+  ArrArr x y -> spush $ Arr $ map Arr $ splitOn y x
+  ArrStr x y -> spush $ Arr $ map Arr $ splitOn (strToArr y) x
+    -- Note that 'str arr /' will reorder to 'arr str /'.
+  ArrBlk x y -> forM_ x $ \v -> spush v >> modifyM (runs y)
+  StrStr x y -> spush $ Arr $ map Str $ splitOn y x
+  StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> modifyM (runs y)
+  BlkBlk _ _ -> undefined -- TODO: unfold
+
+percent :: (Monad m) => S m ()
+percent = order $ \o -> case o of
+  IntInt x y -> spush $ Int $ mod x y
+  IntArr _ _ -> undefined -- TODO: select elems from y whose index mod arg is x
+  IntStr _ _ -> undefined -- TODO: select elems from y whose index mod arg is x
+  IntBlk _ _ -> undefined -- TODO: ???
+  ArrArr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn y x
+  ArrStr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn (strToArr y) x
+  ArrBlk x y -> lb >> forM_ x (\v -> spush v >> modifyM (runs y)) >> rb
+  StrStr x y -> spush $ Arr $ map Str $ filter (not . null) $ splitOn y x
+  StrBlk x y -> lb >> forM_ (strToArr x) (\v -> spush v >> modifyM (runs y)) >> rb
+  BlkBlk _ _ -> undefined -- TODO: ???
+
+less :: (Monad m) => S m ()
+less = undefined -- TODO
+
+greater :: (Monad m) => S m ()
+greater = undefined -- TODO
+
+equal :: (Monad m) => S m ()
+equal = undefined -- TODO
+
+question :: (Monad m) => S m ()
+question = undefined -- TODO
+
 --
 -- And finally, the initial state with built-in functions
 --
@@ -277,4 +334,15 @@ prelude = empty { variables = M.fromList
   , ("&", prim ampersand)
   , ("^", prim caret)
   , ("-", prim minus)
+  , ("*", prim star)
+  , ("/", prim slash)
+  , ("%", prim percent)
+  , ("<", prim less)
+  , (">", prim greater)
+  , ("=", prim equal)
+  , ("?", prim question)
+  , ("and", Blk $ parse $ scan "1$if")
+  , ("or", Blk $ parse $ scan "1$\\if")
+  , ("xor", Blk $ parse $ scan "\\!!{!}*")
+  , ("n", Blk [Push $ Str "\n"])
   ] }
