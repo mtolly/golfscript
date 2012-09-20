@@ -11,6 +11,7 @@ import Control.Monad
 import Data.Maybe
 import Data.List
 import Data.List.Split
+import Data.Accessor
 
 -- | Two values popped off the stack, coerced to the same type. For @Foos x y@,
 -- the original stack looked like @[y, x, ...]@.
@@ -219,7 +220,7 @@ backtick = unary $ \x -> spush $ Str $ uneval [Push x]
 -- sort by mapping (blk)
 dollar :: (Monad m) => S m ()
 dollar = unary $ \x -> case x of
-  Int i -> gets stack >>= \stk -> case lookup i (zip [0..] stk) of
+  Int i -> gets (^. stack) >>= \stk -> case lookup i (zip [0..] stk) of
     Nothing -> return ()
     Just v  -> spush v
   Arr a -> spush $ Arr $ sort a
@@ -356,34 +357,35 @@ question = order $ \o -> case o of
 --
 
 prelude :: (Monad m) => Golf m
-prelude = empty { variables = M.fromList
-  [ ("[", prim lb)
-  , ("]", prim rb)
-  , (".", prim dot)
-  , ("~", prim tilde)
-  , ("!", prim bang)
-  , ("@", prim at)
-  , ("\\", prim backslash)
-  , (";", prim semicolon)
-  , (",", prim comma)
-  , ("(", prim lp)
-  , (")", prim rp)
-  , ("`", prim backtick)
-  , ("$", prim dollar)
-  , ("+", prim plus)
-  , ("|", prim pipe)
-  , ("&", prim ampersand)
-  , ("^", prim caret)
-  , ("-", prim minus)
-  , ("*", prim star)
-  , ("/", prim slash)
-  , ("%", prim percent)
-  , ("<", prim less)
-  , (">", prim greater)
-  , ("=", prim equal)
-  , ("?", prim question)
-  , ("and", Blk $ parse $ scan "1$if")
-  , ("or", Blk $ parse $ scan "1$\\if")
-  , ("xor", Blk $ parse $ scan "\\!!{!}*")
-  , ("n", Blk [Push $ Str "\n"])
-  ] }
+prelude = variables ^= var $ empty where
+  var = M.fromList
+    [ ("[", prim lb)
+    , ("]", prim rb)
+    , (".", prim dot)
+    , ("~", prim tilde)
+    , ("!", prim bang)
+    , ("@", prim at)
+    , ("\\", prim backslash)
+    , (";", prim semicolon)
+    , (",", prim comma)
+    , ("(", prim lp)
+    , (")", prim rp)
+    , ("`", prim backtick)
+    , ("$", prim dollar)
+    , ("+", prim plus)
+    , ("|", prim pipe)
+    , ("&", prim ampersand)
+    , ("^", prim caret)
+    , ("-", prim minus)
+    , ("*", prim star)
+    , ("/", prim slash)
+    , ("%", prim percent)
+    , ("<", prim less)
+    , (">", prim greater)
+    , ("=", prim equal)
+    , ("?", prim question)
+    , ("and", Blk $ parse $ scan "1$if")
+    , ("or", Blk $ parse $ scan "1$\\if")
+    , ("xor", Blk $ parse $ scan "\\!!{!}*")
+    , ("n", Blk [Push $ Str "\n"])
+    ]
