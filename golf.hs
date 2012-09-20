@@ -8,7 +8,6 @@ import Data.Functor.Identity
 import Data.Accessor
 
 main = getArgs >>= \argv -> case argv of
-  [prog] -> putStrLn $ uneval $ reverse $ map Push $ (^. stack) $
+  [prog] -> putStrLn $ output $ stackToArr $
     runIdentity $ runs (parse $ scan prog) prelude
-    -- todo: uneval isn't exactly right. top level strings shouldn't get quotes
   _ -> putStrLn "Usage: golf \"program\""

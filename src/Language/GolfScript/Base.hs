@@ -99,3 +99,12 @@ uneval = concatMap go . intersperse (Get " ") where
       Arr a -> "[" ++ uneval (map Push a) ++ "]"
       Str s -> show s
       Blk b -> "{" ++ uneval b ++ "}"
+
+output :: Val m -> String
+output (Int i) = show i
+output (Arr a) = concatMap output a
+output (Str s) = s
+output (Blk b) = "{" ++ uneval b ++ "}"
+
+stackToArr :: Golf m -> Val m
+stackToArr = Arr . reverse . getVal stack

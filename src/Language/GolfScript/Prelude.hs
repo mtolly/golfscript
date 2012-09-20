@@ -144,14 +144,14 @@ order f = binary $ \x y -> f $ case (x, y) of
 
 -- | @[@ starts an array \"literal\"
 lb :: (Monad m) => S m ()
-lb = modify $ \(Golf stk bts vrs) -> Golf stk (0 : bts) vrs
+lb = modify $ (brackets ^: (0 :))
 
 -- | @]@ ends an array \"literal\"
 rb :: (Monad m) => S m ()
-rb = modify $ \(Golf stk bts vrs) -> case bts of
-  [] -> Golf [Arr $ reverse stk] [] vrs
-  b : bs -> case splitAt b stk of
-    (stkl, stkr) -> Golf ((Arr $ reverse stkl) : stkr) bs vrs
+rb = modify $ \g -> case g ^. brackets of
+  [] -> stack ^: (\s -> [Arr $ reverse s]) $ brackets ^= [] $ g
+  b : bs -> case splitAt b $ g ^. stack of
+    (stkl, stkr) -> stack ^= (Arr $ reverse stkl) : stkr $ brackets ^= bs $ g
 
 -- | @.@ duplicates the top value, by 1 pop and 2 pushes
 dot :: (Monad m) => S m ()
