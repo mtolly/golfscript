@@ -288,30 +288,41 @@ star = order $ \o -> case o of
 
 slash :: (Monad m) => S m ()
 slash = order $ \o -> case o of
+  -- int/int: divide
   IntInt x y -> spush $ Int $ div x y
+  -- int/seq: split seq into chunks of n elements
   IntArr x y -> spush $ Arr $ map Arr $ chunksOf (fromIntegral x) y
   IntStr x y -> spush $ Arr $ map Str $ chunksOf (fromIntegral x) y
-  IntBlk _ _ -> undefined -- TODO: ???
+  -- seq/seq: split x on occurrences of y
   ArrArr x y -> spush $ Arr $ map Arr $ splitOn y x
   ArrStr x y -> spush $ Arr $ map Arr $ splitOn (strToArr y) x
     -- Note that 'str arr /' will reorder to 'arr str /'.
   StrStr x y -> spush $ Arr $ map Str $ splitOn y x
+  -- seq/blk: run block for each elem in seq
   ArrBlk x y -> forM_ x $ \v -> spush v >> modifyM (runs y)
   StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> modifyM (runs y)
-  BlkBlk _ _ -> undefined -- TODO: unfold
+  -- blk/blk: TODO unfold
+  BlkBlk _ _ -> undefined
+  -- TODO: ???
+  IntBlk _ _ -> undefined
 
 percent :: (Monad m) => S m ()
 percent = order $ \o -> case o of
+  -- int/int: modulo
   IntInt x y -> spush $ Int $ mod x y
-  IntArr _ _ -> undefined -- TODO: select elems from y whose index mod arg is x
-  IntStr _ _ -> undefined -- TODO: select elems from y whose index mod arg is x
-  IntBlk _ _ -> undefined -- TODO: ???
+  -- int/seq: select elems from y whose index mod x is 0
+  IntArr x y -> spush $ Arr $ map head $ chunksOf (fromIntegral x) y
+  IntStr x y -> spush $ Str $ map head $ chunksOf (fromIntegral x) y
+  -- seq/seq: split x on occurrences of y, but get rid of empty segments
   ArrArr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn y x
   ArrStr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn (strToArr y) x
   StrStr x y -> spush $ Arr $ map Str $ filter (not . null) $ splitOn y x
+  -- 
   ArrBlk x y -> lb >> forM_ x (\v -> spush v >> modifyM (runs y)) >> rb
   StrBlk x y -> lb >> forM_ (strToArr x) (\v -> spush v >> modifyM (runs y)) >> rb
-  BlkBlk _ _ -> undefined -- TODO: ???
+  -- TODO: ???
+  IntBlk _ _ -> undefined
+  BlkBlk _ _ -> undefined
 
 less :: (Monad m) => S m ()
 less = order $ \o -> case o of
