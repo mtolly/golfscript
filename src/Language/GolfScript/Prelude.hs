@@ -181,7 +181,7 @@ backslash = binary $ \x y -> spush y >> spush x
 semicolon :: (Monad m) => S m ()
 semicolon = spop >> return ()
 
--- | @,@ generate @[0..n]@ (int), length (arr\/str), filter arr\/str by key (blk)
+-- | @,@ make @[0..n]@ (int), length (arr\/str), filter arr\/str by key (blk)
 comma :: (Monad m) => S m ()
 comma = unary $ \x -> case x of
   Int i -> spush $ Arr $ map Int [0 .. i-1]
@@ -216,7 +216,7 @@ rp = unary $ \x -> case x of
 backtick :: (Monad m) => S m ()
 backtick = unary $ \x -> spush $ Str $ uneval [Push x]
 
--- | @$@ copy nth item from stack (int), sort (arr\/str), take str\/ arr and
+-- | @$@ copy nth item from stack (int), sort (arr\/str), take str\/arr and
 -- sort by mapping (blk)
 dollar :: (Monad m) => S m ()
 dollar = unary $ \x -> case x of
@@ -235,7 +235,7 @@ plus = coerce $ \c -> case c of
   Strs x y -> spush $ Str $ x ++ y
   Blks x y -> spush $ Blk $ x ++ [Get " "] ++ y
 
--- | @|@: bitwise or (ints), setwise or (arr\/strs\/blks)
+-- | @|@ coerce: bitwise or (ints), setwise or (arrs\/strs\/blks)
 pipe :: (Monad m) => S m ()
 pipe = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .|. y
@@ -243,6 +243,7 @@ pipe = coerce $ \c -> case c of
   Strs x y -> spush $ Str $ union x y
   Blks _ _ -> undefined -- TODO: ???
 
+-- | @|@ coerce: bitwise and (ints), setwise and (arrs\/strs\/blks)
 ampersand :: (Monad m) => S m ()
 ampersand = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .&. y
@@ -250,6 +251,7 @@ ampersand = coerce $ \c -> case c of
   Strs x y -> spush $ Str $ intersect x y
   Blks _ _ -> undefined -- TODO: ???
 
+-- | @^@ coerce: bitwise xor (ints), setwise xor (arrs\/strs\/blks)
 caret :: (Monad m) => S m ()
 caret = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ xor x y
@@ -257,6 +259,7 @@ caret = coerce $ \c -> case c of
   Strs x y -> spush $ Str $ union x y \\ intersect x y
   Blks _ _ -> undefined -- TODO: ???
 
+-- | @^@ coerce: subtract (ints), setwise difference (arrs\/strs\/blks)
 minus :: (Monad m) => S m ()
 minus = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x - y
@@ -264,12 +267,14 @@ minus = coerce $ \c -> case c of
   Strs x y -> spush $ Str $ x \\ y
   Blks _ _ -> undefined -- TODO: ???
 
+-- | @*@ order: multiply (int*int), run n times (int*blk), multiply and join
+-- (int*seq), join with separator (seq*seq), fold (seq*blk)
 star :: (Monad m) => S m ()
 star = order $ \o -> case o of
   IntInt x y -> spush $ Int $ x * y
-  IntBlk x y -> modifyM $ runs $ concat $ genericReplicate x y
   IntArr x y -> spush $ Arr $ concat $ genericReplicate x y
   IntStr x y -> spush $ Str $ concat $ genericReplicate x y
+  IntBlk x y -> modifyM $ runs $ concat $ genericReplicate x y
   ArrArr _ _ -> undefined -- TODO: join
   ArrStr _ _ -> undefined -- TODO: join
     -- Note that 'str arr *' will reorder to 'arr str *'.
