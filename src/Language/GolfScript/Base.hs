@@ -87,24 +87,24 @@ runs = foldr (>=>) return . map run
 -- | Produces a program which executes a series of actions, with two conditions:
 -- the array bracket operators aren't overwritten, and the space character
 -- hasn't been assigned a value.
-uneval :: [Do m] -> String
-uneval = concatMap go . intersperse (Get " ") where
+unparse :: [Do m] -> String
+unparse = concatMap go where
   -- todo: avoid putting unnecessary space chars in?
   go d = case d of
     Get x -> x
     Set x -> ':' : x
-    Prim _ -> error "uneval: can't print primitive function"
+    Prim _ -> error "unparse: can't print primitive function"
     Push v -> case v of
       Int i -> show i
-      Arr a -> "[" ++ uneval (map Push a) ++ "]"
+      Arr a -> "[" ++ unparse (intersperse (Get " ") $ map Push a) ++ "]"
       Str s -> show s
-      Blk b -> "{" ++ uneval b ++ "}"
+      Blk b -> "{" ++ unparse b ++ "}"
 
 output :: Val m -> String
 output (Int i) = show i
 output (Arr a) = concatMap output a
 output (Str s) = s
-output (Blk b) = "{" ++ uneval b ++ "}"
+output (Blk b) = "{" ++ unparse b ++ "}"
 
 stackToArr :: Golf m -> Val m
 stackToArr = Arr . reverse . getVal stack

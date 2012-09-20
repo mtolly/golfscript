@@ -23,3 +23,4 @@ Library
 Executable golf
   main-is:          golf.hs
   build-depends:    base, golfscript, transformers, data-accessor
+  ghc-options:      -Wall

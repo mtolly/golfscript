@@ -22,7 +22,7 @@ $alphascore ($alphascore|$digit)+ { Var }
 \" (\\ . | [^\\\"])* \"           { StrLit . read }
 \' (\\ . | [^\\\'])* \'           { StrLit . rawString }
 
-. { Var }
+(. | \n) { Var }
 
 {
 

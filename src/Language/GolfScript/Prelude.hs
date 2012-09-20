@@ -10,6 +10,7 @@ import Control.Monad.Trans.State
 import Control.Monad
 import Data.Maybe
 import Data.List
+import Data.Ord
 import Data.List.Split
 import Data.Accessor
 
@@ -49,6 +50,10 @@ prim s = Blk [Prim $ P $ execStateT s]
 
 spush :: (Monad m) => Val m -> S m ()
 spush x = modify (push x)
+
+spop' :: (Monad m) => S m (Val m)
+spop' = gets pop >>=
+  maybe (error "spop: empty stack") (\(x, g) -> put g >> return x)
 
 spop :: (Monad m) => S m (Maybe (Val m))
 spop = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
@@ -212,9 +217,9 @@ rp = unary $ \x -> case x of
   Str (unsnoc -> Just (cs, c)) -> spush (Str cs) >> spush (Int $ c2i c)
   _ -> spush x
 
--- | @`@ uneval: convert a value to the code which generates that value
+-- | @`@ unparse: convert a value to the code which generates that value
 backtick :: (Monad m) => S m ()
-backtick = unary $ \x -> spush $ Str $ uneval [Push x]
+backtick = unary $ \x -> spush $ Str $ unparse [Push x]
 
 -- | @$@ copy nth item from stack (int), sort (arr\/str), take str\/arr and
 -- sort by mapping (blk)
@@ -225,7 +230,15 @@ dollar = unary $ \x -> case x of
     Just v  -> spush v
   Arr a -> spush $ Arr $ sort a
   Str s -> spush $ Str $ sort s
-  Blk _ -> undefined -- TODO: take a str/arr and sort by mapping
+  Blk b -> unary $ \y -> case y of
+    Arr a -> sortOnM f a >>= spush . Arr
+    Str s -> sortOnM (f . Int . c2i) s >>= spush . Str
+    _ -> undefined
+    where f z = spush z >> modifyM (runs b) >> spop'
+
+sortOnM :: (Ord b, Monad m) => (a -> m b) -> [a] -> m [a]
+sortOnM f xs = mapM f xs >>= \ys ->
+  return $ map fst $ sortBy (comparing snd) $ zip xs ys
 
 -- | @+@ coerce: add (ints), concat (arrs\/strs\/blks)
 plus :: (Monad m) => S m ()
@@ -263,8 +276,8 @@ caret = coerce $ \c -> case c of
 minus :: (Monad m) => S m ()
 minus = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x - y
-  Arrs x y -> spush $ Arr $ x \\ y
-  Strs x y -> spush $ Str $ x \\ y
+  Arrs x y -> spush $ Arr $ x \\ y -- TODO: \\ only removes first occurences
+  Strs x y -> spush $ Str $ x \\ y -- TODO: \\ only removes first occurences
   Blks _ _ -> undefined -- TODO: ???
 
 -- | @*@ order: multiply (int*int), run n times (int*blk), multiply and join
@@ -281,7 +294,7 @@ star = order $ \o -> case o of
   StrStr x y -> spush $ Str $ intercalate y $ map (:"") x
   ArrBlk _ _ -> undefined -- TODO: fold
   StrBlk _ _ -> undefined -- TODO: fold
-  BlkBlk _ y -> mapM_ (spush . Int . c2i) $ uneval y
+  BlkBlk _ y -> mapM_ (spush . Int . c2i) $ unparse y
     -- convert y to str, push each char int to stack ???
     -- {anything}{abc}* ==> [97 98 99]
     -- probably a bug, but we're gonna copy it :D
@@ -311,8 +324,12 @@ percent = order $ \o -> case o of
   -- int/int: modulo
   IntInt x y -> spush $ Int $ mod x y
   -- int/seq: select elems from y whose index mod x is 0
-  IntArr x y -> spush $ Arr $ map head $ chunksOf (fromIntegral x) y
-  IntStr x y -> spush $ Str $ map head $ chunksOf (fromIntegral x) y
+  IntArr x y -> if x < 0
+    then spush $ Arr $ map head $ chunksOf (fromIntegral $ abs x) $ reverse y
+    else spush $ Arr $ map head $ chunksOf (fromIntegral x) y
+  IntStr x y -> if x < 0
+    then spush $ Str $ map head $ chunksOf (fromIntegral $ abs x) $ reverse y
+    else spush $ Str $ map head $ chunksOf (fromIntegral x) y
   -- seq/seq: split x on occurrences of y, but get rid of empty segments
   ArrArr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn y x
   ArrStr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn (strToArr y) x
@@ -329,7 +346,7 @@ less = order $ \o -> case o of
   IntInt x y -> spush $ unbool $ x < y
   ArrArr x y -> spush $ unbool $ x < y
   StrStr x y -> spush $ unbool $ x < y
-  BlkBlk x y -> spush $ unbool $ uneval x < uneval y
+  BlkBlk x y -> spush $ unbool $ unparse x < unparse y
   _ -> undefined -- TODO
 
 greater :: (Monad m) => S m ()
@@ -337,7 +354,7 @@ greater = order $ \o -> case o of
   IntInt x y -> spush $ unbool $ x > y
   ArrArr x y -> spush $ unbool $ x > y
   StrStr x y -> spush $ unbool $ x > y
-  BlkBlk x y -> spush $ unbool $ uneval x > uneval y
+  BlkBlk x y -> spush $ unbool $ unparse x > unparse y
   _ -> undefined -- TODO
 
 equal :: (Monad m) => S m ()
@@ -346,15 +363,15 @@ equal = order $ \o -> case o of
   IntInt x y -> spush $ unbool $ x == y
   ArrArr x y -> spush $ unbool $ x == y
   StrStr x y -> spush $ unbool $ x == y
-  BlkBlk x y -> spush $ unbool $ uneval x == uneval y
+  BlkBlk x y -> spush $ unbool $ unparse x == unparse y
   ArrStr x y -> spush $ unbool $ x == strToArr y
-  StrBlk x y -> spush $ unbool $ x == uneval y
+  StrBlk x y -> spush $ unbool $ x == unparse y
   -- For int and sequence, get at index.
   IntArr x y -> maybe (return ()) spush $ lookup x $ zip [0..] y
   IntStr x y -> maybe (return ()) (spush . Int . c2i) $
     lookup x $ zip [0..] y
   IntBlk x y -> maybe (return ()) (spush . Int . c2i) $
-    lookup x $ zip [0..] $ uneval y
+    lookup x $ zip [0..] $ unparse y
   -- TODO: ???
   ArrBlk _ _ -> undefined
 
@@ -366,6 +383,12 @@ question = order $ \o -> case o of
   IntArr x y -> spush $ Int $ fromMaybe (-1) $ lookup (Int x) $ zip y [0..]
   IntStr x y -> spush $ Int $ fromMaybe (-1) $ lookup (i2c x) $ zip y [0..]
   -- For seq and blk, find element and push index.
+  _ -> undefined -- TODO
+
+doWhile :: (Monad m) => S m ()
+doWhile = unary $ \x -> case x of
+  Blk b -> go where
+    go = predicate b >>= \p -> if p then go else return ()
   _ -> undefined -- TODO
 
 --
@@ -404,4 +427,5 @@ prelude = variables ^= var $ empty where
     , ("or", Blk $ parse $ scan "1$\\if")
     , ("xor", Blk $ parse $ scan "\\!!{!}*")
     , ("n", Blk [Push $ Str "\n"])
+    , ("do", prim doWhile)
     ]
