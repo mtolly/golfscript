@@ -5,6 +5,7 @@ import qualified Data.HashMap as M
 import Control.Monad
 import Data.List (intersperse)
 import Data.Accessor
+import Language.GolfScript.Scan
 
 -- | A value, parametrized by a monad for primitive functions.
 data Val m
@@ -84,27 +85,34 @@ run d g = case d of
 runs :: (Monad m) => [Do m] -> Golf m -> m (Golf m)
 runs = foldr (>=>) return . map run
 
--- | Produces a program which executes a series of actions, with two conditions:
--- the array bracket operators aren't overwritten, and the space character
--- hasn't been assigned a value.
-unparse :: [Do m] -> String
-unparse = concatMap go where
-  -- todo: avoid putting unnecessary space chars in?
-  go d = case d of
-    Get x -> x
-    Set x -> ':' : x
-    Prim _ -> error "unparse: can't print primitive function"
-    Push v -> case v of
-      Int i -> show i
-      Arr a -> "[" ++ unparse (intersperse (Get " ") $ map Push a) ++ "]"
-      Str s -> show s
-      Blk b -> "{" ++ unparse b ++ "}"
+unscan :: [Token] -> String
+unscan = concatMap $ \t -> case t of
+  Var x -> x
+  IntLit i -> show i
+  StrLit s -> show s
+  LBrace -> "{"
+  RBrace -> "}"
+  Colon -> ":"
+
+unparse :: [Do m] -> [Token]
+unparse = concatMap $ \d -> case d of
+  Get x -> [Var x]
+  Set x -> [Colon, Var x]
+  Prim _ -> error "unparse: can't unparse Prim"
+  Push v -> case v of
+    Int i -> [IntLit i]
+    Arr a -> [Var "["] ++ unparse (intersperse (Get " ") (map Push a)) ++ [Var "]"]
+    Str s -> [StrLit s]
+    Blk b -> [LBrace] ++ unparse b ++ [RBrace]
+
+uneval :: [Do m] -> String
+uneval = unscan . unparse
 
 output :: Val m -> String
 output (Int i) = show i
 output (Arr a) = concatMap output a
 output (Str s) = s
-output (Blk b) = "{" ++ unparse b ++ "}"
+output (Blk b) = "{" ++ unscan (unparse b) ++ "}"
 
 stackToArr :: Golf m -> Val m
 stackToArr = Arr . reverse . getVal stack

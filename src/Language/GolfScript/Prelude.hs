@@ -217,9 +217,9 @@ rp = unary $ \x -> case x of
   Str (unsnoc -> Just (cs, c)) -> spush (Str cs) >> spush (Int $ c2i c)
   _ -> spush x
 
--- | @`@ unparse: convert a value to the code which generates that value
+-- | @`@ uneval: convert a value to the code which generates that value
 backtick :: (Monad m) => S m ()
-backtick = unary $ \x -> spush $ Str $ unparse [Push x]
+backtick = unary $ \x -> spush $ Str $ uneval [Push x]
 
 -- | @$@ copy nth item from stack (int), sort (arr\/str), take str\/arr and
 -- sort by mapping (blk)
@@ -252,33 +252,37 @@ plus = coerce $ \c -> case c of
 pipe :: (Monad m) => S m ()
 pipe = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .|. y
-  Arrs x y -> spush $ Arr $ nub $ union x y
-  Strs x y -> spush $ Str $ nub $ union x y
-  Blks _ _ -> undefined -- TODO: ???
+  Arrs x y -> spush $ Arr $ op x y
+  Strs x y -> spush $ Str $ op x y
+  Blks x y -> spush $ Blk $ parse $ scan $ op (uneval x) (uneval y)
+  where op x y = nub $ union x y
 
 -- | @|@ coerce: bitwise and (ints), setwise and (arrs\/strs\/blks)
 ampersand :: (Monad m) => S m ()
 ampersand = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .&. y
-  Arrs x y -> spush $ Arr $ nub $ intersect x y
-  Strs x y -> spush $ Str $ nub $ intersect x y
-  Blks _ _ -> undefined -- TODO: ???
+  Arrs x y -> spush $ Arr $ op x y
+  Strs x y -> spush $ Str $ op x y
+  Blks x y -> spush $ Blk $ parse $ scan $ op (uneval x) (uneval y)
+  where op x y = nub $ intersect x y
 
 -- | @^@ coerce: bitwise xor (ints), setwise xor (arrs\/strs\/blks)
 caret :: (Monad m) => S m ()
 caret = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ xor x y
-  Arrs x y -> spush $ Arr $ nub $ union x y \\ intersect x y
-  Strs x y -> spush $ Str $ nub $ union x y \\ intersect x y
-  Blks _ _ -> undefined -- TODO: ???
+  Arrs x y -> spush $ Arr $ op x y
+  Strs x y -> spush $ Str $ op x y
+  Blks x y -> spush $ Blk $ parse $ scan $ op (uneval x) (uneval y)
+  where op x y = nub $ union x y \\ intersect x y
 
 -- | @^@ coerce: subtract (ints), setwise difference (arrs\/strs\/blks)
 minus :: (Monad m) => S m ()
 minus = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x - y
-  Arrs x y -> spush $ Arr $ filter (`notElem` y) x
-  Strs x y -> spush $ Str $ filter (`notElem` y) x
-  Blks _ _ -> undefined -- TODO: ???
+  Arrs x y -> spush $ Arr $ op x y
+  Strs x y -> spush $ Str $ op x y
+  Blks x y -> spush $ Blk $ parse $ scan $ op (uneval x) (uneval y)
+  where op x y = filter (`notElem` y) x
 
 -- | @*@ order: multiply (int*int), run n times (int*blk), multiply and join
 -- (int*seq), join with separator (seq*seq), fold (seq*blk)
@@ -300,7 +304,7 @@ star = order $ \o -> case o of
   ArrBlk _ _ -> undefined -- TODO: fold
   StrBlk _ _ -> undefined -- TODO: fold
   -- ???
-  BlkBlk _ y -> mapM_ (spush . Int . c2i) $ unparse y
+  BlkBlk _ y -> mapM_ (spush . Int . c2i) $ uneval y
     -- convert y to str, push each char int to stack ???
     -- {anything}{abc}* ==> [97 98 99]
     -- probably a bug, but we're gonna copy it :D
@@ -352,7 +356,7 @@ less = order $ \o -> case o of
   IntInt x y -> spush $ unbool $ x < y
   ArrArr x y -> spush $ unbool $ x < y
   StrStr x y -> spush $ unbool $ x < y
-  BlkBlk x y -> spush $ unbool $ unparse x < unparse y
+  BlkBlk x y -> spush $ unbool $ uneval x < uneval y
   _ -> undefined -- TODO
 
 greater :: (Monad m) => S m ()
@@ -360,7 +364,7 @@ greater = order $ \o -> case o of
   IntInt x y -> spush $ unbool $ x > y
   ArrArr x y -> spush $ unbool $ x > y
   StrStr x y -> spush $ unbool $ x > y
-  BlkBlk x y -> spush $ unbool $ unparse x > unparse y
+  BlkBlk x y -> spush $ unbool $ uneval x > uneval y
   _ -> undefined -- TODO
 
 equal :: (Monad m) => S m ()
@@ -369,15 +373,15 @@ equal = order $ \o -> case o of
   IntInt x y -> spush $ unbool $ x == y
   ArrArr x y -> spush $ unbool $ x == y
   StrStr x y -> spush $ unbool $ x == y
-  BlkBlk x y -> spush $ unbool $ unparse x == unparse y
+  BlkBlk x y -> spush $ unbool $ uneval x == uneval y
   ArrStr x y -> spush $ unbool $ x == strToArr y
-  StrBlk x y -> spush $ unbool $ x == unparse y
+  StrBlk x y -> spush $ unbool $ x == uneval y
   -- For int and sequence, get at index.
   IntArr x y -> maybe (return ()) spush $ lookup x $ zip [0..] y
   IntStr x y -> maybe (return ()) (spush . Int . c2i) $
     lookup x $ zip [0..] y
   IntBlk x y -> maybe (return ()) (spush . Int . c2i) $
-    lookup x $ zip [0..] $ unparse y
+    lookup x $ zip [0..] $ uneval y
   -- TODO: ???
   ArrBlk _ _ -> undefined
 

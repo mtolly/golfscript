@@ -4,6 +4,7 @@ module Language.GolfScript.Parse (scan, parse, Token(..)) where
 
 import Language.GolfScript.Base
 import Language.GolfScript.Scan
+import Data.List (intersperse)
 }
 
 %name parse
