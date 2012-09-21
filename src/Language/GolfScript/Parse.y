@@ -20,7 +20,13 @@ import Language.GolfScript.Scan
 
 %%
 
+Top : Do Top { $1 : $2 }
+    | ':' { [] }
+    | '{' Top { [Push (Blk $2)] } -- allows an unterminated block
+    | { [] }
+
 DoList : Do DoList { $1 : $2 }
+       | ':' { [] } -- allows a (meaningless) colon at EOF
        | { [] }
 
 Do : int { Push (Int $1) }

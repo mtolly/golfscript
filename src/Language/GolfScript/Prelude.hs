@@ -252,48 +252,54 @@ plus = coerce $ \c -> case c of
 pipe :: (Monad m) => S m ()
 pipe = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .|. y
-  Arrs x y -> spush $ Arr $ union x y
-  Strs x y -> spush $ Str $ union x y
+  Arrs x y -> spush $ Arr $ nub $ union x y
+  Strs x y -> spush $ Str $ nub $ union x y
   Blks _ _ -> undefined -- TODO: ???
 
 -- | @|@ coerce: bitwise and (ints), setwise and (arrs\/strs\/blks)
 ampersand :: (Monad m) => S m ()
 ampersand = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .&. y
-  Arrs x y -> spush $ Arr $ intersect x y
-  Strs x y -> spush $ Str $ intersect x y
+  Arrs x y -> spush $ Arr $ nub $ intersect x y
+  Strs x y -> spush $ Str $ nub $ intersect x y
   Blks _ _ -> undefined -- TODO: ???
 
 -- | @^@ coerce: bitwise xor (ints), setwise xor (arrs\/strs\/blks)
 caret :: (Monad m) => S m ()
 caret = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ xor x y
-  Arrs x y -> spush $ Arr $ union x y \\ intersect x y
-  Strs x y -> spush $ Str $ union x y \\ intersect x y
+  Arrs x y -> spush $ Arr $ nub $ union x y \\ intersect x y
+  Strs x y -> spush $ Str $ nub $ union x y \\ intersect x y
   Blks _ _ -> undefined -- TODO: ???
 
 -- | @^@ coerce: subtract (ints), setwise difference (arrs\/strs\/blks)
 minus :: (Monad m) => S m ()
 minus = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x - y
-  Arrs x y -> spush $ Arr $ x \\ y -- TODO: \\ only removes first occurences
-  Strs x y -> spush $ Str $ x \\ y -- TODO: \\ only removes first occurences
+  Arrs x y -> spush $ Arr $ filter (`notElem` y) x
+  Strs x y -> spush $ Str $ filter (`notElem` y) x
   Blks _ _ -> undefined -- TODO: ???
 
 -- | @*@ order: multiply (int*int), run n times (int*blk), multiply and join
 -- (int*seq), join with separator (seq*seq), fold (seq*blk)
 star :: (Monad m) => S m ()
 star = order $ \o -> case o of
+  -- multiply
   IntInt x y -> spush $ Int $ x * y
+  -- concat n copies of seq
   IntArr x y -> spush $ Arr $ concat $ genericReplicate x y
   IntStr x y -> spush $ Str $ concat $ genericReplicate x y
+  -- run a block n times
   IntBlk x y -> modifyM $ runs $ concat $ genericReplicate x y
+  -- join two sequences
   ArrArr _ _ -> undefined -- TODO: join
   ArrStr _ _ -> undefined -- TODO: join
     -- Note that 'str arr *' will reorder to 'arr str *'.
   StrStr x y -> spush $ Str $ intercalate y $ map (:"") x
+  -- fold
   ArrBlk _ _ -> undefined -- TODO: fold
   StrBlk _ _ -> undefined -- TODO: fold
+  -- ???
   BlkBlk _ y -> mapM_ (spush . Int . c2i) $ unparse y
     -- convert y to str, push each char int to stack ???
     -- {anything}{abc}* ==> [97 98 99]
@@ -334,7 +340,7 @@ percent = order $ \o -> case o of
   ArrArr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn y x
   ArrStr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn (strToArr y) x
   StrStr x y -> spush $ Arr $ map Str $ filter (not . null) $ splitOn y x
-  -- 
+  -- seq/blk: map elements
   ArrBlk x y -> lb >> forM_ x (\v -> spush v >> modifyM (runs y)) >> rb
   StrBlk x y -> lb >> forM_ (strToArr x) (\v -> spush v >> modifyM (runs y)) >> rb
   -- TODO: ???
