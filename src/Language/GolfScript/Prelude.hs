@@ -306,7 +306,7 @@ star = order $ \o -> case o of
   -- ???
   BlkBlk _ y -> mapM_ (spush . Int . c2i) $ uneval y
     -- convert y to str, push each char int to stack ???
-    -- {anything}{abc}* ==> [97 98 99]
+    -- {anything}{abc}* ==> [97 98 99]~
     -- probably a bug, but we're gonna copy it :D
 
 slash :: (Monad m) => S m ()

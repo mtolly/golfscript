@@ -101,10 +101,14 @@ unparse = concatMap $ \d -> case d of
   Prim _ -> error "unparse: can't unparse Prim"
   Push v -> case v of
     Int i -> [IntLit i]
-    Arr a -> [Var "["] ++ unparse (intersperse (Get " ") (map Push a)) ++ [Var "]"]
+    Arr a -> [Var "["] ++ inner ++ [Var "]"]
+      where inner = unparse $ intersperse (Get " ") (map Push a)
     Str s -> [StrLit s]
     Blk b -> [LBrace] ++ unparse b ++ [RBrace]
 
+--- | Produces a program which executes a series of actions, with two conditions:
+--- the array bracket operators aren't overwritten, and the space character
+--- hasn't been assigned a value.
 uneval :: [Do m] -> String
 uneval = unscan . unparse
 
