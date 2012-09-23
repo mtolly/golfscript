@@ -44,7 +44,8 @@ stack = accessor stack_ $ \x g -> g { stack_ = x }
 
 -- | The way array brackets work is somewhat convoluted. The left bracket pushes
 -- a zero onto this list. The 'push' command increments each of these numbers,
--- and the 'pop' command decrements them (while not letting them go below zero). - -- The right bracket pops a number off this list, 'take's that many values off
+-- and the 'pop' command decrements them (while not letting them go below zero).
+-- The right bracket pops a number off this list, 'take's that many values off
 -- the stack, reverses them, and puts them into a new list.
 brackets :: Accessor (Golf m) [Int]
 brackets = accessor brackets_ $ \x g -> g { brackets_ = x }
@@ -59,7 +60,7 @@ empty = Golf [] [] M.empty
 
 -- | Push a value onto the stack.
 push :: Val m -> Golf m -> Golf m
-push x g = stack ^: (x :) $ brackets ^: (map (+ 1)) $ g
+push x g = stack ^: (x :) $ brackets ^: map (+ 1) $ g
 
 -- | Pop a value off the stack, or Nothing if the stack is empty.
 pop :: Golf m -> Maybe (Val m, Golf m)

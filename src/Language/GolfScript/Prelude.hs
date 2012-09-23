@@ -149,7 +149,7 @@ order f = binary $ \x y -> f $ case (x, y) of
 
 -- | @[@ starts an array \"literal\"
 lb :: (Monad m) => S m ()
-lb = modify $ (brackets ^: (0 :))
+lb = modify $ brackets ^: (0 :)
 
 -- | @]@ ends an array \"literal\"
 rb :: (Monad m) => S m ()
@@ -398,7 +398,7 @@ question = order $ \o -> case o of
 doWhile :: (Monad m) => S m ()
 doWhile = unary $ \x -> case x of
   Blk b -> go where
-    go = predicate b >>= \p -> if p then go else return ()
+    go = predicate b >>= \p -> when p go
   _ -> undefined -- TODO
 
 --
