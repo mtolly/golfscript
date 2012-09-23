@@ -412,10 +412,10 @@ question = order $ \o -> case o of
   -- For seq and blk, find element and push index.
   _ -> undefined -- TODO
 
-doWhile :: (Monad m) => S m ()
-doWhile = unary $ \x -> case x of
+primDo :: (Monad m) => S m ()
+primDo = unary $ \x -> case x of
   Blk b -> go where go = predicate b >>= \p -> when p go
-  _ -> error "doWhile: 'do' expects block on top of stack"
+  _ -> error "primDo: 'do' expects block on top of stack"
 
 --
 -- And finally, the initial state with built-in functions
@@ -453,5 +453,5 @@ prelude = variables ^= var $ empty where
     , ("or", Blk $ parse $ scan "1$\\if")
     , ("xor", Blk $ parse $ scan "\\!!{!}*")
     , ("n", Blk [Push $ Str "\n"])
-    , ("do", prim doWhile)
+    , ("do", prim primDo)
     ]
