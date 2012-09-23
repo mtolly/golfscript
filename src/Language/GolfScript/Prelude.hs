@@ -399,7 +399,7 @@ equal = order $ \o -> case o of
   -- TODO: ???
   ArrBlk _ _ -> undefined
   where index n xs = lookup n $ if n < 0
-          then zip [-1 ..] $ reverse xs
+          then zip [-1, -2 ..] $ reverse xs
           else zip [0 ..] xs
 
 question :: (Monad m) => S m ()
