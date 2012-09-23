@@ -353,19 +353,35 @@ percent = order $ \o -> case o of
 
 less :: (Monad m) => S m ()
 less = order $ \o -> case o of
+  -- less than comparison
   IntInt x y -> spush $ unbool $ x < y
   ArrArr x y -> spush $ unbool $ x < y
   StrStr x y -> spush $ unbool $ x < y
   BlkBlk x y -> spush $ unbool $ uneval x < uneval y
+  -- select elements in a sequence with index < n
+  IntArr x y -> spush $ Arr $ index x y
+  IntStr x y -> spush $ Str $ index x y
+  IntBlk x y -> spush $ Blk $ eval $ index x $ uneval y
   _ -> undefined -- TODO
+  where index n xs = if n < 0
+          then genericTake (n + genericLength xs) xs -- reverse $ genericTake (abs n - 1) $ reverse xs
+          else genericTake n xs
 
 greater :: (Monad m) => S m ()
 greater = order $ \o -> case o of
+  -- greater than comparison
   IntInt x y -> spush $ unbool $ x > y
   ArrArr x y -> spush $ unbool $ x > y
   StrStr x y -> spush $ unbool $ x > y
   BlkBlk x y -> spush $ unbool $ uneval x > uneval y
+  -- select elements in a sequence with index >= n
+  IntArr x y -> spush $ Arr $ index x y
+  IntStr x y -> spush $ Str $ index x y
+  IntBlk x y -> spush $ Blk $ eval $ index x $ uneval y
   _ -> undefined -- TODO
+  where index n xs = if n < 0
+          then genericDrop (n + genericLength xs) xs
+          else genericDrop n xs
 
 equal :: (Monad m) => S m ()
 equal = order $ \o -> case o of
@@ -377,13 +393,14 @@ equal = order $ \o -> case o of
   ArrStr x y -> spush $ unbool $ x == strToArr y
   StrBlk x y -> spush $ unbool $ x == uneval y
   -- For int and sequence, get at index.
-  IntArr x y -> maybe (return ()) spush $ lookup x $ zip [0..] y
-  IntStr x y -> maybe (return ()) (spush . Int . c2i) $
-    lookup x $ zip [0..] y
-  IntBlk x y -> maybe (return ()) (spush . Int . c2i) $
-    lookup x $ zip [0..] $ uneval y
+  IntArr x y -> maybe (return ()) spush $ index x y
+  IntStr x y -> maybe (return ()) (spush . Int . c2i) $ index x y
+  IntBlk x y -> maybe (return ()) (spush . Int . c2i) $ index x $ uneval y
   -- TODO: ???
   ArrBlk _ _ -> undefined
+  where index n xs = lookup n $ if n < 0
+          then zip [-1 ..] $ reverse xs
+          else zip [0 ..] xs
 
 question :: (Monad m) => S m ()
 question = order $ \o -> case o of
@@ -397,9 +414,8 @@ question = order $ \o -> case o of
 
 doWhile :: (Monad m) => S m ()
 doWhile = unary $ \x -> case x of
-  Blk b -> go where
-    go = predicate b >>= \p -> when p go
-  _ -> undefined -- TODO
+  Blk b -> go where go = predicate b >>= \p -> when p go
+  _ -> error "doWhile: 'do' expects block on top of stack"
 
 --
 -- And finally, the initial state with built-in functions
