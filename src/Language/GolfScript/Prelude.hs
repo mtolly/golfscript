@@ -417,6 +417,16 @@ primDo = unary $ \x -> case x of
   Blk b -> go where go = predicate b >>= \p -> when p go
   _ -> error "primDo: 'do' expects block on top of stack"
 
+primIf :: (Monad m) => S m ()
+primIf = ternary $ \x y z -> case if bool x then y else z of
+  Blk b -> modifyM $ runs b
+  v     -> spush v
+
+primAbs :: (Monad m) => S m ()
+primAbs = unary $ \x -> case x of
+  Int i -> spush $ Int $ abs i
+  _     -> error "primAbs: 'abs' expected int argument"
+
 --
 -- And finally, the initial state with built-in functions
 --
@@ -454,4 +464,6 @@ prelude = variables ^= var $ empty where
     , ("xor", Blk $ parse $ scan "\\!!{!}*")
     , ("n", Blk [Push $ Str "\n"])
     , ("do", prim primDo)
+    , ("if", prim primIf)
+    , ("abs", prim primAbs)
     ]
