@@ -1,6 +1,6 @@
 {
 {- | Generated parser for GolfScript programs -}
-module Language.GolfScript.Parse (scan, parse, Token(..)) where
+module Language.GolfScript.Parse (scan, parse, eval, Token(..)) where
 
 import Language.GolfScript.Base
 import Language.GolfScript.Scan
@@ -40,5 +40,8 @@ Do : int { Push (Int $1) }
 
 parseError :: [Token] -> a
 parseError _ = error "Parse error"
+
+eval :: String -> [Do m]
+eval = parse . scan
 
 }

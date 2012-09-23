@@ -193,13 +193,13 @@ comma = unary $ \x -> case x of
   Arr a -> spush $ Int $ fromIntegral $ length a
   Str s -> spush $ Int $ fromIntegral $ length s
   Blk b -> spop >>= \mb -> case mb of -- take array a, then: filterBy b a
-    Just (Arr a) -> filterM (\v -> spush v >> predicate b) a >>= spush . Arr
-    Just (Str s) -> filterM (\v -> spush v >> predicate b) (strToArr s) >>=
-      spush . Str . arrToStr
-    Just (Int _) -> undefined -- .rb error
-      -- maybe, filter single int?
-    Just (Blk _) -> undefined -- TODO: ???
+    Just (Int _) -> error "comma: can't execute '<int><blk>,'" -- .rb error
+    Just (Arr a) -> blkFilter a >>= spush . Arr
+    Just (Str s) -> blkFilter (strToArr s) >>= spush . Str . arrToStr
+    Just (Blk b') -> blkFilter (strToArr $ uneval b') >>=
+      spush . Blk . eval . arrToStr
     Nothing -> spush x -- .rb error
+    where blkFilter = filterM $ \v -> spush v >> predicate b
 
 -- | @(@ decrement (int), uncons from left (arr\/str)
 lp :: (Monad m) => S m ()
@@ -228,7 +228,7 @@ dollar = unary $ \x -> case x of
   Int i -> gets (^. stack) >>= \stk -> case lookup i (zip [0..] stk) of
     Nothing -> return ()
     Just v  -> spush v
-  Arr a -> spush $ Arr $ sort a
+  Arr a -> spush $ Arr $ sort a -- in .rb, sorting different types is an error
   Str s -> spush $ Str $ sort s
   Blk b -> unary $ \y -> case y of
     Arr a -> sortOnM f a >>= spush . Arr

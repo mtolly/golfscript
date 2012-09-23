@@ -1,0 +1,9 @@
+Random notes on golfscript.rb
+
+* When converting [int] to str, each int gets truncated to a byte.
+  For example, "[260]''+" == "[4]''+".
+
+* Sorting a list with more than one type crashes. Haskell simply uses the
+  derived Ord instance (where Int < Arr < Str < Blk).
+
+* For many operations, Blk behaves exactly like a Str, for example sorting.
