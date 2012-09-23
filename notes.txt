@@ -7,3 +7,6 @@ Random notes on golfscript.rb
   derived Ord instance (where Int < Arr < Str < Blk).
 
 * For many operations, Blk behaves exactly like a Str, for example sorting.
+
+* For "order" operators like */%, "str arr op" gets reordered to "arr str op",
+  which could be surprising.

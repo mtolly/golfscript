@@ -302,7 +302,6 @@ star = order $ \o -> case o of
   -- join two sequences
   ArrArr _ _ -> undefined -- TODO: join
   ArrStr _ _ -> undefined -- TODO: join
-    -- Note that 'str arr *' will reorder to 'arr str *'.
   StrStr x y -> spush $ Str $ intercalate y $ map (:"") x
   -- fold
   ArrBlk _ _ -> undefined -- TODO: fold
@@ -323,7 +322,6 @@ slash = order $ \o -> case o of
   -- seq/seq: split x on occurrences of y
   ArrArr x y -> spush $ Arr $ map Arr $ splitOn y x
   ArrStr x y -> spush $ Arr $ map Arr $ splitOn (strToArr y) x
-    -- Note that 'str arr /' will reorder to 'arr str /'.
   StrStr x y -> spush $ Arr $ map Str $ splitOn y x
   -- seq/blk: run block for each elem in seq
   ArrBlk x y -> forM_ x $ \v -> spush v >> modifyM (runs y)
