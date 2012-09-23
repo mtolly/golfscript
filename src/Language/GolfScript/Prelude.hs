@@ -86,9 +86,11 @@ strToArr :: String -> [Val m]
 strToArr = map $ Int . c2i
 
 arrToStr :: [Val m] -> String
-arrToStr = mapMaybe $ \x -> case x of
-  Int i -> Just $ i2c i
-  _ -> Nothing
+arrToStr = concatMap $ \x -> case x of
+  Int i -> [i2c i]
+  Str s -> s
+  Arr a -> arrToStr a
+  Blk b -> uneval b
 
 -- | Runs a command sequence, then pops a value off and evaluates it for truth.
 predicate :: (Monad m) => [Do m] -> S m Bool
@@ -153,10 +155,12 @@ lb = modify $ brackets ^: (0 :)
 
 -- | @]@ ends an array \"literal\"
 rb :: (Monad m) => S m ()
-rb = modify $ \g -> case g ^. brackets of
-  [] -> stack ^: (\s -> [Arr $ reverse s]) $ brackets ^= [] $ g
-  b : bs -> case splitAt b $ g ^. stack of
-    (stkl, stkr) -> stack ^= (Arr $ reverse stkl) : stkr $ brackets ^= bs $ g
+rb = gets (^. brackets) >>= \bts -> case bts of
+  [] -> modify $ stack ^: \s -> [Arr $ reverse s]
+  b : bs -> do
+    modify $ brackets ^= bs   -- pop a bracket value off
+    arr <- replicateM b spop' -- pop n elements off the stack
+    spush $ Arr $ reverse arr -- reverse them and push on the new array
 
 -- | @.@ duplicates the top value, by 1 pop and 2 pushes
 dot :: (Monad m) => S m ()
