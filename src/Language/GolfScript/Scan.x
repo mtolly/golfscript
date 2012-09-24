@@ -19,8 +19,8 @@ tokens :-
 
 \-? $digit+                       { IntLit . read }
 $alphascore ($alphascore|$digit)+ { Var }
-\" (\\ . | [^\\\"])* \"           { StrLit . read }
-\' (\\ . | [^\\\'])* \'           { StrLit . rawString }
+\" (\\ . | ([^\\\"] | \n))* \"    { StrLit . read }
+\' (\\ . | ([^\\\'] | \n))* \'    { StrLit . rawString }
 
 (. | \n) { Var }
 

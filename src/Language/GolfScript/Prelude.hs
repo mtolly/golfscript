@@ -105,7 +105,7 @@ c2i :: Char -> Integer
 c2i = fromIntegral . fromEnum
 
 i2c :: Integer -> Char
-i2c = toEnum . fromIntegral
+i2c = toEnum . (.&. 0xFF) . fromIntegral
 
 coerce :: (Monad m) => (Coerced m -> S m ()) -> S m ()
 coerce f = binary $ \x y -> f $ case (x, y) of
@@ -116,13 +116,13 @@ coerce f = binary $ \x y -> f $ case (x, y) of
   (Arr a, Int _) -> Arrs a [y]
   (Arr a, Arr b) -> Arrs a b
   (Arr a, Str b) -> Strs (arrToStr a) b
-  (Arr _, Blk _) -> undefined -- TODO
+  (Arr _, Blk _) -> error "coerce: TODO implement arr->blk conversion"
   (Str a, Int b) -> Strs a (show b)
   (Str a, Arr b) -> Strs a (arrToStr b)
   (Str a, Str b) -> Strs a b
   (Str a, Blk b) -> Blks (parse $ scan a) b
   (Blk a, Int _) -> Blks a [Push y]
-  (Blk _, Arr _) -> undefined -- TODO
+  (Blk _, Arr _) -> error "coerce: TODO implement arr->blk conversion"
   (Blk a, Str b) -> Blks a (parse $ scan b)
   (Blk a, Blk b) -> Blks a b
 
@@ -300,17 +300,21 @@ star = order $ \o -> case o of
   -- run a block n times
   IntBlk x y -> modifyM $ runs $ concat $ genericReplicate x y
   -- join two sequences
-  ArrArr _ _ -> undefined -- TODO: join
-  ArrStr _ _ -> undefined -- TODO: join
+  ArrArr _ _ -> error "star: TODO implement arr*arr join"
+  ArrStr _ _ -> error "star: TODO implement arr*str join"
   StrStr x y -> spush $ Str $ intercalate y $ map (:"") x
   -- fold
-  ArrBlk _ _ -> undefined -- TODO: fold
-  StrBlk _ _ -> undefined -- TODO: fold
+  ArrBlk x y -> fold x y
+  StrBlk x y -> fold (strToArr x) y
   -- ???
   BlkBlk _ y -> mapM_ (spush . Int . c2i) $ uneval y
-    -- convert y to str, push each char int to stack ???
     -- {anything}{abc}* ==> [97 98 99]~
-    -- probably a bug, but we're gonna copy it :D
+    -- convert y to str, push each char int to stack
+    -- probably a bug, but we'll copy it for now!
+  where fold [] _ = return ()
+        fold (x : xs) blk = do
+          spush x
+          forM_ xs $ \y -> spush y >> modifyM (runs blk)
 
 slash :: (Monad m) => S m ()
 slash = order $ \o -> case o of
@@ -326,8 +330,8 @@ slash = order $ \o -> case o of
   -- seq/blk: run block for each elem in seq
   ArrBlk x y -> forM_ x $ \v -> spush v >> modifyM (runs y)
   StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> modifyM (runs y)
-  -- blk/blk: TODO unfold
-  BlkBlk _ _ -> undefined
+  -- blk/blk: unfold
+  BlkBlk _ _ -> error "slash: TODO implement blk/blk unfold"
   -- TODO: ???
   IntBlk _ _ -> undefined
 
@@ -349,9 +353,9 @@ percent = order $ \o -> case o of
   -- seq/blk: map elements
   ArrBlk x y -> lb >> forM_ x (\v -> spush v >> modifyM (runs y)) >> rb
   StrBlk x y -> lb >> forM_ (strToArr x) (\v -> spush v >> modifyM (runs y)) >> rb
-  -- TODO: ???
-  IntBlk _ _ -> undefined
-  BlkBlk _ _ -> undefined
+  -- int/blk: error
+  IntBlk _ _ -> error "percent: undefined operation int%blk"
+  BlkBlk _ _ -> error "percent: undefined operation blk%blk"
 
 less :: (Monad m) => S m ()
 less = order $ \o -> case o of
@@ -398,8 +402,8 @@ equal = order $ \o -> case o of
   IntArr x y -> maybe (return ()) spush $ index x y
   IntStr x y -> maybe (return ()) (spush . Int . c2i) $ index x y
   IntBlk x y -> maybe (return ()) (spush . Int . c2i) $ index x $ uneval y
-  -- TODO: ???
-  ArrBlk _ _ -> undefined
+  -- ???
+  ArrBlk _ _ -> error "equal: undefined operation int=blk"
   where index n xs = lookup n $ if n < 0
           then zip [-1, -2 ..] $ reverse xs
           else zip [0 ..] xs
