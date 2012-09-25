@@ -14,6 +14,7 @@ import Data.List
 import Data.Ord
 import Data.List.Split
 import Data.Accessor
+import System.Random
 
 -- | Two values popped off the stack, coerced to the same type. For @Foos x y@,
 -- the original stack looked like @[y, x, ...]@.
@@ -439,6 +440,11 @@ primAbs = unary $ \x -> case x of
 primPrint :: S IO ()
 primPrint = unary $ lift . putStr . output
 
+primRand :: S IO ()
+primRand = unary $ \x -> case x of
+  Int i -> lift (getStdRandom $ randomR (0, i - 1)) >>= spush . Int
+  _ -> error "primRand: 'rand' expected int argument"
+
 --
 -- And finally, the initial state with built-in functions
 --
@@ -486,6 +492,7 @@ preludeIO = prelude ++
   [ ("print", prim primPrint)
   , ("puts", Blk $ parse $ scan "print n print")
   , ("p", Blk $ parse $ scan "`puts")
+  , ("rand", prim primRand)
   ]
 
 -- | Returns an initial state with a certain prelude loaded.

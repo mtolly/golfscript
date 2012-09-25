@@ -8,7 +8,7 @@ Cabal-version:      >= 1.8
 Category:           Data
 
 Library
-  Build-Depends:    base, array, hashmap, transformers,
+  Build-Depends:    base, array, hashmap, transformers, random,
                     split >= 0.2 && < 0.3,
                     data-accessor
                     
