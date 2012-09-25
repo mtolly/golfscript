@@ -82,9 +82,11 @@ binary f = unary $ \y -> spop >>= maybe (spush y) (\x -> f x y)
 ternary :: (Monad m) => (Val m -> Val m -> Val m -> S m ()) -> S m ()
 ternary f = binary $ \y z -> spop >>= maybe (spush y >> spush z) (\x -> f x y z)
 
+-- | Converts a string to a array of integers.
 strToArr :: String -> [Val m]
 strToArr = map $ Int . c2i
 
+-- | Array to string conversion in cases like @[1 [2] \'xyz\']\'\'+@
 arrToStr :: [Val m] -> String
 arrToStr = concatMap $ \x -> case x of
   Int i -> [i2c i]
