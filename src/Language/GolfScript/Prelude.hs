@@ -7,6 +7,7 @@ import Language.GolfScript.Parse
 import qualified Data.HashMap as M
 import Data.Bits
 import Control.Monad.Trans.State
+import Control.Monad.Trans.Class (lift)
 import Control.Monad
 import Data.Maybe
 import Data.List
@@ -434,6 +435,9 @@ primAbs :: (Monad m) => S m ()
 primAbs = unary $ \x -> case x of
   Int i -> spush $ Int $ abs i
   _     -> error "primAbs: 'abs' expected int argument"
+
+primPrint :: S IO ()
+primPrint = unary $ lift . putStr . output
 
 --
 -- And finally, the initial state with built-in functions

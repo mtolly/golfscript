@@ -26,10 +26,10 @@ data Do m
 -- | An opaque built-in monadic function. Because of the way the stack works, a
 -- program can only execute Prim values; it can never handle them directly.
 newtype Prim m = P { runP :: Golf m -> m (Golf m) }
-instance Eq   (Prim m) where _ == _ = error "(==): can't equate Prim"
-instance Ord  (Prim m) where compare _ _ = error "(==): can't compare Prim"
-instance Show (Prim m) where show _ = "<prim>"
-instance Read (Prim m) where readsPrec = error "readsPrec: can't read Prim"
+instance Eq   (Prim m) where _ == _      = error "(==): can't equate Prim"
+instance Ord  (Prim m) where compare _ _ = error "compare: can't compare Prim"
+instance Show (Prim m) where show _      = "<prim>"
+instance Read (Prim m) where readsPrec   = error "readsPrec: can't read Prim"
 
 -- | The state of a GolfScript program.
 data Golf m = Golf
