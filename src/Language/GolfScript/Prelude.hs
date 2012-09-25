@@ -443,39 +443,48 @@ primPrint = unary $ lift . putStr . output
 -- And finally, the initial state with built-in functions
 --
 
-prelude :: (Monad m) => Golf m
-prelude = variables ^= var $ empty where
-  var = M.fromList
-    [ ("[", prim lb)
-    , ("]", prim rb)
-    , (".", prim dot)
-    , ("~", prim tilde)
-    , ("!", prim bang)
-    , ("@", prim at)
-    , ("\\", prim backslash)
-    , (";", prim semicolon)
-    , (",", prim comma)
-    , ("(", prim lp)
-    , (")", prim rp)
-    , ("`", prim backtick)
-    , ("$", prim dollar)
-    , ("+", prim plus)
-    , ("|", prim pipe)
-    , ("&", prim ampersand)
-    , ("^", prim caret)
-    , ("-", prim minus)
-    , ("*", prim star)
-    , ("/", prim slash)
-    , ("%", prim percent)
-    , ("<", prim less)
-    , (">", prim greater)
-    , ("=", prim equal)
-    , ("?", prim question)
-    , ("and", Blk $ parse $ scan "1$if")
-    , ("or", Blk $ parse $ scan "1$\\if")
-    , ("xor", Blk $ parse $ scan "\\!!{!}*")
-    , ("n", Blk [Push $ Str "\n"])
-    , ("do", prim primDo)
-    , ("if", prim primIf)
-    , ("abs", prim primAbs)
-    ]
+purePrelude :: (Monad m) => [(String, Val m)]
+purePrelude =
+  [ ("[", prim lb)
+  , ("]", prim rb)
+  , (".", prim dot)
+  , ("~", prim tilde)
+  , ("!", prim bang)
+  , ("@", prim at)
+  , ("\\", prim backslash)
+  , (";", prim semicolon)
+  , (",", prim comma)
+  , ("(", prim lp)
+  , (")", prim rp)
+  , ("`", prim backtick)
+  , ("$", prim dollar)
+  , ("+", prim plus)
+  , ("|", prim pipe)
+  , ("&", prim ampersand)
+  , ("^", prim caret)
+  , ("-", prim minus)
+  , ("*", prim star)
+  , ("/", prim slash)
+  , ("%", prim percent)
+  , ("<", prim less)
+  , (">", prim greater)
+  , ("=", prim equal)
+  , ("?", prim question)
+  , ("and", Blk $ parse $ scan "1$if")
+  , ("or", Blk $ parse $ scan "1$\\if")
+  , ("xor", Blk $ parse $ scan "\\!!{!}*")
+  , ("n", Blk [Push $ Str "\n"])
+  , ("do", prim primDo)
+  , ("if", prim primIf)
+  , ("abs", prim primAbs)
+  ]
+
+ioPrelude :: [(String, Val IO)]
+ioPrelude = purePrelude ++
+  [ ("print", prim primPrint)
+  , ("puts", Blk $ parse $ scan "print n print")
+  , ("p", Blk $ parse $ scan "`puts")
+  ]
+
+emptyWith :: (Monad m) => [(String, Val m)] -> Golf m
+emptyWith prel = variables ^= M.fromList prel $ empty

@@ -3,7 +3,6 @@ module Main where
 import Language.GolfScript.Base
 import Language.GolfScript.Parse
 import Language.GolfScript.Prelude
-import Data.Functor.Identity
 import System.Environment
 import Data.Accessor
 
@@ -13,5 +12,6 @@ main = getArgs >>= \argv -> case argv of
   _         -> getContents >>= go ""
 
 go :: String -> String -> IO ()
-go input prog = putStrLn $ output $ stackToArr $ runIdentity $
-  runs (parse $ scan prog) $ stack ^= [Str input] $ prelude
+go input prog = do
+  g <- runs (parse $ scan prog) $ stack ^= [Str input] $ emptyWith ioPrelude
+  putStrLn $ output $ stackToArr g
