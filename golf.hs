@@ -13,5 +13,5 @@ main = getArgs >>= \argv -> case argv of
 
 go :: String -> String -> IO ()
 go input prog = do
-  g <- runs (parse $ scan prog) $ stack ^= [Str input] $ emptyWith ioPrelude
+  g <- runs (parse $ scan prog) $ stack ^= [Str input] $ emptyWith preludeIO
   putStrLn $ output $ stackToArr g

@@ -443,8 +443,9 @@ primPrint = unary $ lift . putStr . output
 -- And finally, the initial state with built-in functions
 --
 
-purePrelude :: (Monad m) => [(String, Val m)]
-purePrelude =
+-- | A prelude consisting only of pure functions.
+prelude :: (Monad m) => [(String, Val m)]
+prelude =
   [ ("[", prim lb)
   , ("]", prim rb)
   , (".", prim dot)
@@ -479,12 +480,14 @@ purePrelude =
   , ("abs", prim primAbs)
   ]
 
-ioPrelude :: [(String, Val IO)]
-ioPrelude = purePrelude ++
+-- | A prelude consisting of pure functions, plus IO print functions.
+preludeIO :: [(String, Val IO)]
+preludeIO = prelude ++
   [ ("print", prim primPrint)
   , ("puts", Blk $ parse $ scan "print n print")
   , ("p", Blk $ parse $ scan "`puts")
   ]
 
+-- | Returns an initial state with a certain prelude loaded.
 emptyWith :: (Monad m) => [(String, Val m)] -> Golf m
 emptyWith prel = variables ^= M.fromList prel $ empty
