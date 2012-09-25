@@ -11,7 +11,7 @@ $alphascore = [a-zA-Z_]
 
 tokens :-
 
-\# [^\n\r]+ ;
+\# [^\n\r]* ;
 
 \: { const Colon }
 \{ { const LBrace }
