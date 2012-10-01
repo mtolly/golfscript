@@ -341,10 +341,10 @@ slash = order $ \o -> case o of
   -- seq/blk: run block for each elem in seq
   ArrBlk x y -> forM_ x $ \v -> spush v >> execute y
   StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> execute y
-  -- blk/blk: unfold TODO doesn't work yet
-  BlkBlk cond body -> go >>= spush . Arr where
+  -- blk/blk: unfold
+  BlkBlk cond body -> go >>= \xs -> semicolon >> spush (Arr xs) where
     go = dot >> predicate cond >>= \b ->
-      if b then execute body >> liftM2 (:) top go else return []
+      if b then liftM2 (:) top $ execute body >> go else return []
   -- TODO: ???
   IntBlk _ _ -> undefined
 
