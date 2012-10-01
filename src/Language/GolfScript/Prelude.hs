@@ -437,6 +437,24 @@ primAbs = unary $ \x -> case x of
   Int i -> spush $ Int $ abs i
   _     -> error "primAbs: 'abs' expected int argument"
 
+primZip :: (Monad m) => S m ()
+primZip = undefined
+
+primBase :: (Monad m) => S m ()
+primBase = undefined
+
+primWhile :: (Monad m) => S m ()
+primWhile = binary f where
+  f (Blk body) (Blk cond) = go where
+    go = predicate cond >>= \b -> when b $ modifyM (runs body) >> go
+  f _ _ = error "primWhile: 'while' expected 2 block arguments"
+
+primUntil :: (Monad m) => S m ()
+primUntil = binary f where
+  f (Blk body) (Blk cond) = go where
+    go = predicate cond >>= \b -> when (not b) $ modifyM (runs body) >> go
+  f _ _ = error "primUntil: 'until' expected 2 block arguments"
+
 primPrint :: S IO ()
 primPrint = unary $ lift . putStr . output
 
@@ -484,6 +502,10 @@ prelude =
   , ("do", prim primDo)
   , ("if", prim primIf)
   , ("abs", prim primAbs)
+  , ("zip", prim primZip)
+  , ("base", prim primBase)
+  , ("while", prim primWhile)
+  , ("until", prim primUntil)
   ]
 
 -- | A prelude consisting of pure functions, plus IO print functions.
