@@ -55,7 +55,7 @@ spush x = modify (push x)
 
 spop' :: (Monad m) => S m (Val m)
 spop' = gets pop >>=
-  maybe (error "spop: empty stack") (\(x, g) -> put g >> return x)
+  maybe (error "spop': empty stack") (\(x, g) -> put g >> return x)
 
 spop :: (Monad m) => S m (Maybe (Val m))
 spop = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
@@ -334,8 +334,10 @@ slash = order $ \o -> case o of
   -- seq/blk: run block for each elem in seq
   ArrBlk x y -> forM_ x $ \v -> spush v >> modifyM (runs y)
   StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> modifyM (runs y)
-  -- blk/blk: unfold
-  BlkBlk _ _ -> error "slash: TODO implement blk/blk unfold"
+  -- blk/blk: unfold TODO doesn't work yet
+  BlkBlk cond body -> go >>= spush . Arr where
+    go = dot >> predicate cond >>= \b ->
+      if b then modifyM (runs body) >> liftM2 (:) spop' go else return []
   -- TODO: ???
   IntBlk _ _ -> undefined
 
@@ -445,13 +447,13 @@ primBase = undefined
 
 primWhile :: (Monad m) => S m ()
 primWhile = binary f where
-  f (Blk body) (Blk cond) = go where
+  f (Blk cond) (Blk body) = go where
     go = predicate cond >>= \b -> when b $ modifyM (runs body) >> go
   f _ _ = error "primWhile: 'while' expected 2 block arguments"
 
 primUntil :: (Monad m) => S m ()
 primUntil = binary f where
-  f (Blk body) (Blk cond) = go where
+  f (Blk cond) (Blk body) = go where
     go = predicate cond >>= \b -> when (not b) $ modifyM (runs body) >> go
   f _ _ = error "primUntil: 'until' expected 2 block arguments"
 
