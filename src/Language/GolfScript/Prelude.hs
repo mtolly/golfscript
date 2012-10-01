@@ -131,10 +131,10 @@ coerce f = binary $ \x y -> f $ case (x, y) of
   (Str a, Int b) -> Strs a (show b)
   (Str a, Arr b) -> Strs a (arrToStr b)
   (Str a, Str b) -> Strs a b
-  (Str a, Blk b) -> Blks (parse $ scan a) b
+  (Str a, Blk b) -> Blks (eval a) b
   (Blk a, Int _) -> Blks a [Push y]
   (Blk _, Arr _) -> error "coerce: TODO implement arr->blk conversion"
-  (Blk a, Str b) -> Blks a (parse $ scan b)
+  (Blk a, Str b) -> Blks a (eval b)
   (Blk a, Blk b) -> Blks a b
 
 order :: (Monad m) => (Ordered m -> S m ()) -> S m ()
@@ -183,7 +183,7 @@ tilde = unary $ \x -> case x of
   Int i -> spush $ Int $ complement i
   Arr a -> mapM_ spush a
   Blk b -> execute b
-  Str s -> execute $ parse $ scan s
+  Str s -> execute $ eval s
 
 -- | @!@ boolean not: if in {@0@, @[]@, @\"\"@, @{}@}, push 1. else push 0.
 bang :: (Monad m) => S m ()
@@ -269,7 +269,7 @@ pipe = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .|. y
   Arrs x y -> spush $ Arr $ op x y
   Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ parse $ scan $ op (uneval x) (uneval y)
+  Blks x y -> spush $ Blk $ eval $ op (uneval x) (uneval y)
   where op x y = nub $ union x y
 
 -- | @|@ coerce: bitwise and (ints), setwise and (arrs\/strs\/blks)
@@ -278,7 +278,7 @@ ampersand = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .&. y
   Arrs x y -> spush $ Arr $ op x y
   Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ parse $ scan $ op (uneval x) (uneval y)
+  Blks x y -> spush $ Blk $ eval $ op (uneval x) (uneval y)
   where op x y = nub $ intersect x y
 
 -- | @^@ coerce: bitwise xor (ints), setwise xor (arrs\/strs\/blks)
@@ -287,7 +287,7 @@ caret = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ xor x y
   Arrs x y -> spush $ Arr $ op x y
   Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ parse $ scan $ op (uneval x) (uneval y)
+  Blks x y -> spush $ Blk $ eval $ op (uneval x) (uneval y)
   where op x y = nub $ union x y \\ intersect x y
 
 -- | @^@ coerce: subtract (ints), setwise difference (arrs\/strs\/blks)
@@ -296,7 +296,7 @@ minus = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x - y
   Arrs x y -> spush $ Arr $ op x y
   Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ parse $ scan $ op (uneval x) (uneval y)
+  Blks x y -> spush $ Blk $ eval $ op (uneval x) (uneval y)
   where op x y = filter (`notElem` y) x
 
 -- | @*@ order: multiply (int*int), run n times (int*blk), multiply and join
@@ -385,7 +385,7 @@ less = order $ \o -> case o of
   IntBlk x y -> spush $ Blk $ eval $ index x $ uneval y
   _ -> undefined -- TODO
   where index n xs = if n < 0
-          then genericTake (n + genericLength xs) xs -- reverse $ genericTake (abs n - 1) $ reverse xs
+          then genericTake (n + genericLength xs) xs
           else genericTake n xs
 
 greater :: (Monad m) => S m ()
@@ -506,9 +506,9 @@ prelude =
   , (">", prim greater)
   , ("=", prim equal)
   , ("?", prim question)
-  , ("and", Blk $ parse $ scan "1$if")
-  , ("or", Blk $ parse $ scan "1$\\if")
-  , ("xor", Blk $ parse $ scan "\\!!{!}*")
+  , ("and", Blk $ eval "1$if")
+  , ("or", Blk $ eval "1$\\if")
+  , ("xor", Blk $ eval "\\!!{!}*")
   , ("n", Blk [Push $ Str "\n"])
   , ("do", prim primDo)
   , ("if", prim primIf)
@@ -523,8 +523,8 @@ prelude =
 preludeIO :: [(String, Val IO)]
 preludeIO = prelude ++
   [ ("print", prim primPrint)
-  , ("puts", Blk $ parse $ scan "print n print")
-  , ("p", Blk $ parse $ scan "`puts")
+  , ("puts", Blk $ eval "print n print")
+  , ("p", Blk $ eval "`puts")
   , ("rand", prim primRand)
   ]
 
