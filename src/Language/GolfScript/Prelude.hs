@@ -345,8 +345,8 @@ slash = order $ \o -> case o of
   BlkBlk cond body -> go >>= \xs -> semicolon >> spush (Arr xs) where
     go = dot >> predicate cond >>= \b ->
       if b then liftM2 (:) top $ execute body >> go else return []
-  -- TODO: ???
-  IntBlk _ _ -> undefined
+  -- int/blk: error
+  IntBlk _ _ -> error "slash: can't execute <int>/<blk>"
 
 percent :: (Monad m) => S m ()
 percent = order $ \o -> case o of
