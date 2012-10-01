@@ -67,7 +67,7 @@ top = gets (^. stack) >>= \stk -> case stk of
   x : _ -> return x
   _     -> error "top: empty stack"
 
--- | False values are the number 0, and the empty array/string/block.
+-- | False values are the number 0, and the empty array\/string\/block.
 bool :: Val m -> Bool
 bool x = notElem x [Int 0, Arr [], Str "", Blk []]
 
@@ -449,10 +449,10 @@ primAbs = unary $ \x -> case x of
   _     -> error "primAbs: 'abs' expected int argument"
 
 primZip :: (Monad m) => S m ()
-primZip = undefined
+primZip = error "primZip: TODO implement zip"
 
 primBase :: (Monad m) => S m ()
-primBase = undefined
+primBase = error "primBase: TODO implement base"
 
 primWhile :: (Monad m) => S m ()
 primWhile = binary f where
