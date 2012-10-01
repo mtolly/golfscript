@@ -113,6 +113,8 @@ unparse = concatMap $ \d -> case d of
 uneval :: [Do m] -> String
 uneval = unscan . unparse
 
+-- | The function used to print the stack's contents on program end.
+-- Equivalent to the @to_gs@ method from the original interpreter.
 output :: Val m -> String
 output (Int i) = show i
 output (Arr a) = concatMap output a
