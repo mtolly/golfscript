@@ -60,6 +60,13 @@ spop' = gets pop >>=
 spop :: (Monad m) => S m (Maybe (Val m))
 spop = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
 
+-- | Returns the top value of the stack, without doing a pop operation.
+-- Bracket boundaries aren't changed.
+top :: (Monad m) => S m (Val m)
+top = gets (^. stack) >>= \stk -> case stk of
+  x : _ -> return x
+  _     -> error "top: empty stack"
+
 -- | False values are the number 0, and the empty array/string/block.
 bool :: Val m -> Bool
 bool x = notElem x [Int 0, Arr [], Str "", Blk []]
@@ -67,8 +74,8 @@ bool x = notElem x [Int 0, Arr [], Str "", Blk []]
 unbool :: Bool -> Val m
 unbool b = Int $ if b then 1 else 0
 
-modifyM :: (Monad m) => (s -> m s) -> StateT s m ()
-modifyM f = StateT $ f >=> \s' -> return ((), s')
+execute :: (Monad m) => [Do m] -> StateT (Golf m) m ()
+execute blk = StateT $ runs blk >=> \s -> return ((), s)
 
 -- | Pop a value off the stack and use it. If the stack is empty, does nothing.
 unary :: (Monad m) => (Val m -> S m ()) -> S m ()
@@ -98,7 +105,7 @@ arrToStr = concatMap $ \x -> case x of
 
 -- | Runs a command sequence, then pops a value off and evaluates it for truth.
 predicate :: (Monad m) => [Do m] -> S m Bool
-predicate xs = modifyM (runs xs) >> liftM (maybe False bool) spop
+predicate xs = execute xs >> liftM (maybe False bool) spop
 
 unsnoc :: [a] -> Maybe ([a], a)
 unsnoc xs = case reverse xs of
@@ -175,8 +182,8 @@ tilde :: (Monad m) => S m ()
 tilde = unary $ \x -> case x of
   Int i -> spush $ Int $ complement i
   Arr a -> mapM_ spush a
-  Blk b -> modifyM $ runs b
-  Str s -> modifyM $ runs $ parse $ scan s
+  Blk b -> execute b
+  Str s -> execute $ parse $ scan s
 
 -- | @!@ boolean not: if in {@0@, @[]@, @\"\"@, @{}@}, push 1. else push 0.
 bang :: (Monad m) => S m ()
@@ -242,7 +249,7 @@ dollar = unary $ \x -> case x of
     Arr a -> sortOnM f a >>= spush . Arr
     Str s -> sortOnM (f . Int . c2i) s >>= spush . Str
     _ -> undefined
-    where f z = spush z >> modifyM (runs b) >> spop'
+    where f z = spush z >> execute b >> spop'
 
 sortOnM :: (Ord b, Monad m) => (a -> m b) -> [a] -> m [a]
 sortOnM f xs = mapM f xs >>= \ys ->
@@ -302,7 +309,7 @@ star = order $ \o -> case o of
   IntArr x y -> spush $ Arr $ concat $ genericReplicate x y
   IntStr x y -> spush $ Str $ concat $ genericReplicate x y
   -- run a block n times
-  IntBlk x y -> modifyM $ runs $ concat $ genericReplicate x y
+  IntBlk x y -> execute $ concat $ genericReplicate x y
   -- join two sequences
   ArrArr _ _ -> error "star: TODO implement arr*arr join"
   ArrStr _ _ -> error "star: TODO implement arr*str join"
@@ -318,7 +325,7 @@ star = order $ \o -> case o of
   where fold [] _ = return ()
         fold (x : xs) blk = do
           spush x
-          forM_ xs $ \y -> spush y >> modifyM (runs blk)
+          forM_ xs $ \y -> spush y >> execute blk
 
 slash :: (Monad m) => S m ()
 slash = order $ \o -> case o of
@@ -332,12 +339,12 @@ slash = order $ \o -> case o of
   ArrStr x y -> spush $ Arr $ map Arr $ splitOn (strToArr y) x
   StrStr x y -> spush $ Arr $ map Str $ splitOn y x
   -- seq/blk: run block for each elem in seq
-  ArrBlk x y -> forM_ x $ \v -> spush v >> modifyM (runs y)
-  StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> modifyM (runs y)
+  ArrBlk x y -> forM_ x $ \v -> spush v >> execute y
+  StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> execute y
   -- blk/blk: unfold TODO doesn't work yet
   BlkBlk cond body -> go >>= spush . Arr where
     go = dot >> predicate cond >>= \b ->
-      if b then modifyM (runs body) >> liftM2 (:) spop' go else return []
+      if b then execute body >> liftM2 (:) top go else return []
   -- TODO: ???
   IntBlk _ _ -> undefined
 
@@ -347,21 +354,23 @@ percent = order $ \o -> case o of
   IntInt x y -> spush $ Int $ mod x y
   -- int/seq: select elems from y whose index mod x is 0
   IntArr x y -> if x < 0
-    then spush $ Arr $ map head $ chunksOf (fromIntegral $ abs x) $ reverse y
-    else spush $ Arr $ map head $ chunksOf (fromIntegral x) y
+    then spush $ Arr $ every (fromIntegral $ abs x) $ reverse y
+    else spush $ Arr $ every (fromIntegral x) y
   IntStr x y -> if x < 0
-    then spush $ Str $ map head $ chunksOf (fromIntegral $ abs x) $ reverse y
-    else spush $ Str $ map head $ chunksOf (fromIntegral x) y
+    then spush $ Str $ every (fromIntegral $ abs x) $ reverse y
+    else spush $ Str $ every (fromIntegral x) y
   -- seq/seq: split x on occurrences of y, but get rid of empty segments
-  ArrArr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn y x
-  ArrStr x y -> spush $ Arr $ map Arr $ filter (not . null) $ splitOn (strToArr y) x
-  StrStr x y -> spush $ Arr $ map Str $ filter (not . null) $ splitOn y x
+  ArrArr x y -> spush $ Arr $ map Arr $ cleanSplitOn y x
+  ArrStr x y -> spush $ Arr $ map Arr $ cleanSplitOn (strToArr y) x
+  StrStr x y -> spush $ Arr $ map Str $ cleanSplitOn y x
   -- seq/blk: map elements
-  ArrBlk x y -> lb >> forM_ x (\v -> spush v >> modifyM (runs y)) >> rb
-  StrBlk x y -> lb >> forM_ (strToArr x) (\v -> spush v >> modifyM (runs y)) >> rb
+  ArrBlk x y -> lb >> forM_ x (\v -> spush v >> execute y) >> rb
+  StrBlk x y -> lb >> forM_ (strToArr x) (\v -> spush v >> execute y) >> rb
   -- int/blk: error
   IntBlk _ _ -> error "percent: undefined operation int%blk"
   BlkBlk _ _ -> error "percent: undefined operation blk%blk"
+  where every i xs = map head $ chunksOf i xs
+        cleanSplitOn xs ys = filter (not . null) $ splitOn xs ys
 
 less :: (Monad m) => S m ()
 less = order $ \o -> case o of
@@ -431,7 +440,7 @@ primDo = unary $ \x -> case x of
 
 primIf :: (Monad m) => S m ()
 primIf = ternary $ \x y z -> case if bool x then y else z of
-  Blk b -> modifyM $ runs b
+  Blk b -> execute b
   v     -> spush v
 
 primAbs :: (Monad m) => S m ()
@@ -448,13 +457,13 @@ primBase = undefined
 primWhile :: (Monad m) => S m ()
 primWhile = binary f where
   f (Blk cond) (Blk body) = go where
-    go = predicate cond >>= \b -> when b $ modifyM (runs body) >> go
+    go = predicate cond >>= \b -> when b $ execute body >> go
   f _ _ = error "primWhile: 'while' expected 2 block arguments"
 
 primUntil :: (Monad m) => S m ()
 primUntil = binary f where
   f (Blk cond) (Blk body) = go where
-    go = predicate cond >>= \b -> when (not b) $ modifyM (runs body) >> go
+    go = predicate cond >>= \b -> when (not b) $ execute body >> go
   f _ _ = error "primUntil: 'until' expected 2 block arguments"
 
 primPrint :: S IO ()
