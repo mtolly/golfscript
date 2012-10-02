@@ -385,7 +385,7 @@ less = order $ \o -> case o of
   IntArr x y -> spush $ Arr $ index x y
   IntStr x y -> spush $ Str $ index x y
   IntBlk x y -> spush $ Blk $ strBlock $ index x $ y^.blockStr
-  _ -> undefined -- TODO
+  _ -> error "less: undefined '<' with two sequences of different types"
   where index n xs = if n < 0
           then genericTake (n + genericLength xs) xs
           else genericTake n xs
@@ -401,7 +401,7 @@ greater = order $ \o -> case o of
   IntArr x y -> spush $ Arr $ index x y
   IntStr x y -> spush $ Str $ index x y
   IntBlk x y -> spush $ Blk $ strBlock $ index x $ y^.blockStr
-  _ -> undefined -- TODO
+  _ -> error "greater: undefined '>' with two sequences of different types"
   where index n xs = if n < 0
           then genericDrop (n + genericLength xs) xs
           else genericDrop n xs
@@ -420,7 +420,7 @@ equal = order $ \o -> case o of
   IntStr x y -> maybe (return ()) (spush . Int . c2i) $ index x y
   IntBlk x y -> maybe (return ()) (spush . Int . c2i) $ index x $ y^.blockStr
   -- ???
-  ArrBlk _ _ -> error "equal: undefined operation arr=blk"
+  ArrBlk _ _ -> error "equal: undefined '=' with array and block"
   where index n xs = lookup n $ if n < 0
           then zip [-1, -2 ..] $ reverse xs
           else zip [0 ..] xs
@@ -448,7 +448,7 @@ primIf = ternary $ \x y z -> case if bool x then y else z of
 primAbs :: (Monad m) => S m ()
 primAbs = unary $ \x -> case x of
   Int i -> spush $ Int $ abs i
-  _     -> error "primAbs: 'abs' expected int argument"
+  _     -> error $ "primAbs: 'abs' expected int arg, received: " ++ show x
 
 primZip :: (Monad m) => S m ()
 primZip = error "primZip: TODO implement zip"
@@ -474,7 +474,7 @@ primPrint = unary $ lift . putStr . output
 primRand :: S IO ()
 primRand = unary $ \x -> case x of
   Int i -> lift (getStdRandom $ randomR (0, i - 1)) >>= spush . Int
-  _ -> error "primRand: 'rand' expected int argument"
+  _ -> error $ "primRand: 'rand' expected int argument, received: " ++ show x
 
 --
 -- And finally, the initial state with built-in functions
