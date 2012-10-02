@@ -38,6 +38,7 @@ parseError _ = error "Parse error"
 eval :: String -> [Do m]
 eval = parse . scan
 
+-- | Creates a block by generating a program, given a string representation.
 strBlock :: String -> Block m
 strBlock str = Block { blockDo_ = eval str, blockStr_ = str }
 

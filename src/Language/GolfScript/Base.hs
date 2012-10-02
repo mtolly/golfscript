@@ -23,10 +23,19 @@ data Do m
   | Prim (Prim m) -- ^ A primitive built-in function.
   deriving (Eq, Ord, Show, Read)
 
+-- | A block of code with both an executable and string representation.
 data Block m = Block
-  { blockDo_ :: [Do m]
+  { blockDo_  :: [Do m]
   , blockStr_ :: String
   } deriving (Eq, Ord, Show, Read)
+
+-- | The executable program expressed by a block.
+blockDo :: Accessor (Block m) [Do m]
+blockDo = accessor blockDo_ $ \x b -> b { blockDo_ = x }
+
+-- | The string representation of a block.
+blockStr :: Accessor (Block m) String
+blockStr = accessor blockStr_ $ \x b -> b { blockStr_ = x }
 
 -- | An opaque built-in monadic function. Because of the way the stack works, a
 -- program can only execute Prim values; it can never handle them directly.
@@ -38,8 +47,8 @@ instance Read (Prim m) where readsPrec   = error "readsPrec: can't read Prim"
 
 -- | The state of a GolfScript program.
 data Golf m = Golf
-  { stack_ :: [Val m]
-  , brackets_ :: [Int]
+  { stack_     :: [Val m]
+  , brackets_  :: [Int]
   , variables_ :: M.Map String (Val m)
   } deriving (Eq, Ord, Show, Read)
 
@@ -59,12 +68,7 @@ brackets = accessor brackets_ $ \x g -> g { brackets_ = x }
 variables :: Accessor (Golf m) (M.Map String (Val m))
 variables = accessor variables_ $ \x g -> g { variables_ = x }
 
-blockDo :: Accessor (Block m) [Do m]
-blockDo = accessor blockDo_ $ \x b -> b { blockDo_ = x }
-
-blockStr :: Accessor (Block m) String
-blockStr = accessor blockStr_ $ \x b -> b { blockStr_ = x }
-
+-- | Creates a block by generating the string representation, given a program.
 doBlock :: [Do m] -> Block m
 doBlock dos = Block { blockDo_ = dos, blockStr_ = uneval dos }
 
