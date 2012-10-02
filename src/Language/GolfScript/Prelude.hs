@@ -420,7 +420,7 @@ equal = order $ \o -> case o of
   IntStr x y -> maybe (return ()) (spush . Int . c2i) $ index x y
   IntBlk x y -> maybe (return ()) (spush . Int . c2i) $ index x $ y^.blockStr
   -- ???
-  ArrBlk _ _ -> error "equal: undefined operation int=blk"
+  ArrBlk _ _ -> error "equal: undefined operation arr=blk"
   where index n xs = lookup n $ if n < 0
           then zip [-1, -2 ..] $ reverse xs
           else zip [0 ..] xs
