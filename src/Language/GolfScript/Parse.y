@@ -1,6 +1,6 @@
 {
 {- | Generated parser for GolfScript programs -}
-module Language.GolfScript.Parse (scan, parse, eval, Token(..)) where
+module Language.GolfScript.Parse (scan, parse, eval, Token(..), strBlock) where
 
 import Language.GolfScript.Base
 import Language.GolfScript.Scan
@@ -21,20 +21,14 @@ import Data.List (intersperse)
 
 %%
 
-Top : Do Top { $1 : $2 }
-    | ':' { [] }
-    | '{' Top { [Push (Blk $2)] } -- allows an unterminated block
-    | { [] }
-
 DoList : Do DoList { $1 : $2 }
-       | ':' { [] } -- allows a (meaningless) colon at EOF
        | { [] }
 
 Do : int { Push (Int $1) }
    | str { Push (Str $1) }
    | var { Get $1 }
    | ':' var { Set $2 }
-   | '{' DoList '}' { Push (Blk $2) }
+   | '{' DoList '}' { Push (Blk $ doBlock $2) }
 
 {
 
@@ -43,5 +37,8 @@ parseError _ = error "Parse error"
 
 eval :: String -> [Do m]
 eval = parse . scan
+
+strBlock :: String -> Block m
+strBlock str = Block { blockDo_ = eval str, blockStr_ = str }
 
 }

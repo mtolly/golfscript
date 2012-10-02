@@ -22,7 +22,7 @@ data Coerced m
   = Ints Integer Integer
   | Arrs [Val m] [Val m]
   | Strs String String
-  | Blks [Do m] [Do m]
+  | Blks (Block m) (Block m)
   deriving (Eq, Ord, Show, Read)
 
 -- | Two values popped off the stack, placed in a standard type-priority order.
@@ -31,20 +31,20 @@ data Ordered m
   = IntInt Integer Integer
   | IntArr Integer [Val m]
   | IntStr Integer String
-  | IntBlk Integer [Do m]
+  | IntBlk Integer (Block m)
   | ArrArr [Val m] [Val m]
   | ArrStr [Val m] String
-  | ArrBlk [Val m] [Do m]
+  | ArrBlk [Val m] (Block m)
   | StrStr String String
-  | StrBlk String [Do m]
-  | BlkBlk [Do m] [Do m]
+  | StrBlk String (Block m)
+  | BlkBlk (Block m) (Block m)
   deriving (Eq, Ord, Show, Read)
 
 type S m = StateT (Golf m) m
 
 -- | Packages a state function as a value that can be assigned to a variable.
 prim :: (Monad m) => S m () -> Val m
-prim s = Blk [Prim $ P $ execStateT s]
+prim s = Blk $ doBlock [Prim $ P $ execStateT s]
 
 --
 -- Helper functions
@@ -69,13 +69,13 @@ top = gets (^. stack) >>= \stk -> case stk of
 
 -- | False values are the number 0, and the empty array\/string\/block.
 bool :: Val m -> Bool
-bool x = notElem x [Int 0, Arr [], Str "", Blk []]
+bool x = notElem x [Int 0, Arr [], Str "", Blk $ doBlock []]
 
 unbool :: Bool -> Val m
 unbool b = Int $ if b then 1 else 0
 
-execute :: (Monad m) => [Do m] -> StateT (Golf m) m ()
-execute blk = StateT $ runs blk >=> \s -> return ((), s)
+execute :: (Monad m) => Block m -> StateT (Golf m) m ()
+execute blk = StateT $ runs (blk ^. blockDo) >=> \s -> return ((), s)
 
 -- | Pop a value off the stack and use it. If the stack is empty, does nothing.
 unary :: (Monad m) => (Val m -> S m ()) -> S m ()
@@ -101,11 +101,11 @@ arrToStr = concatMap $ \x -> case x of
   Int i -> [i2c i]
   Str s -> s
   Arr a -> arrToStr a
-  Blk b -> uneval b
+  Blk b -> b ^. blockStr
 
 -- | Runs a command sequence, then pops a value off and evaluates it for truth.
-predicate :: (Monad m) => [Do m] -> S m Bool
-predicate xs = execute xs >> liftM (maybe False bool) spop
+predicate :: (Monad m) => Block m -> S m Bool
+predicate b = execute b >> liftM (maybe False bool) spop
 
 unsnoc :: [a] -> Maybe ([a], a)
 unsnoc xs = case reverse xs of
@@ -123,7 +123,7 @@ coerce f = binary $ \x y -> f $ case (x, y) of
   (Int a, Int b) -> Ints a b
   (Int _, Arr b) -> Arrs [x] b
   (Int a, Str b) -> Strs (show a) b
-  (Int _, Blk b) -> Blks [Push x] b
+  (Int _, Blk b) -> Blks (doBlock [Push x]) b
   (Arr a, Int _) -> Arrs a [y]
   (Arr a, Arr b) -> Arrs a b
   (Arr a, Str b) -> Strs (arrToStr a) b
@@ -131,10 +131,10 @@ coerce f = binary $ \x y -> f $ case (x, y) of
   (Str a, Int b) -> Strs a (show b)
   (Str a, Arr b) -> Strs a (arrToStr b)
   (Str a, Str b) -> Strs a b
-  (Str a, Blk b) -> Blks (eval a) b
-  (Blk a, Int _) -> Blks a [Push y]
+  (Str a, Blk b) -> Blks (strBlock a) b
+  (Blk a, Int _) -> Blks a (doBlock [Push y])
   (Blk _, Arr _) -> error "coerce: TODO implement arr->blk conversion"
-  (Blk a, Str b) -> Blks a (eval b)
+  (Blk a, Str b) -> Blks a (strBlock b)
   (Blk a, Blk b) -> Blks a b
 
 order :: (Monad m) => (Ordered m -> S m ()) -> S m ()
@@ -183,7 +183,7 @@ tilde = unary $ \x -> case x of
   Int i -> spush $ Int $ complement i
   Arr a -> mapM_ spush a
   Blk b -> execute b
-  Str s -> execute $ eval s
+  Str s -> execute $ strBlock s
 
 -- | @!@ boolean not: if in {@0@, @[]@, @\"\"@, @{}@}, push 1. else push 0.
 bang :: (Monad m) => S m ()
@@ -211,8 +211,8 @@ comma = unary $ \x -> case x of
     Just (Int _) -> error "comma: can't execute '<int><blk>,'" -- .rb error
     Just (Arr a) -> blkFilter a >>= spush . Arr
     Just (Str s) -> blkFilter (strToArr s) >>= spush . Str . arrToStr
-    Just (Blk b') -> blkFilter (strToArr $ uneval b') >>=
-      spush . Blk . eval . arrToStr
+    Just (Blk b') -> blkFilter (strToArr $ b' ^. blockStr) >>=
+      spush . Blk . strBlock . arrToStr
     Nothing -> spush x -- .rb error
     where blkFilter = filterM $ \v -> spush v >> predicate b
 
@@ -261,7 +261,9 @@ plus = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x + y
   Arrs x y -> spush $ Arr $ x ++ y
   Strs x y -> spush $ Str $ x ++ y
-  Blks x y -> spush $ Blk $ x ++ [Get " "] ++ y
+  Blks x y -> spush $ Blk $ Block
+    { blockStr_ = (x ^. blockStr) ++ " " ++ (y ^. blockStr)
+    , blockDo_ = (x ^. blockDo) ++ [Get " "] ++ (y ^. blockDo) }
 
 -- | @|@ coerce: bitwise or (ints), setwise or (arrs\/strs\/blks)
 pipe :: (Monad m) => S m ()
@@ -269,7 +271,7 @@ pipe = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .|. y
   Arrs x y -> spush $ Arr $ op x y
   Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ eval $ op (uneval x) (uneval y)
+  Blks x y -> spush $ Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
   where op x y = nub $ union x y
 
 -- | @|@ coerce: bitwise and (ints), setwise and (arrs\/strs\/blks)
@@ -278,7 +280,7 @@ ampersand = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x .&. y
   Arrs x y -> spush $ Arr $ op x y
   Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ eval $ op (uneval x) (uneval y)
+  Blks x y -> spush $ Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
   where op x y = nub $ intersect x y
 
 -- | @^@ coerce: bitwise xor (ints), setwise xor (arrs\/strs\/blks)
@@ -287,7 +289,7 @@ caret = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ xor x y
   Arrs x y -> spush $ Arr $ op x y
   Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ eval $ op (uneval x) (uneval y)
+  Blks x y -> spush $ Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
   where op x y = nub $ union x y \\ intersect x y
 
 -- | @^@ coerce: subtract (ints), setwise difference (arrs\/strs\/blks)
@@ -296,7 +298,7 @@ minus = coerce $ \c -> case c of
   Ints x y -> spush $ Int $ x - y
   Arrs x y -> spush $ Arr $ op x y
   Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ eval $ op (uneval x) (uneval y)
+  Blks x y -> spush $ Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
   where op x y = filter (`notElem` y) x
 
 -- | @*@ order: multiply (int*int), run n times (int*blk), multiply and join
@@ -309,7 +311,7 @@ star = order $ \o -> case o of
   IntArr x y -> spush $ Arr $ concat $ genericReplicate x y
   IntStr x y -> spush $ Str $ concat $ genericReplicate x y
   -- run a block n times
-  IntBlk x y -> execute $ concat $ genericReplicate x y
+  IntBlk x y -> replicateM_ (fromIntegral x) $ execute y
   -- join two sequences
   ArrArr _ _ -> error "star: TODO implement arr*arr join"
   ArrStr _ _ -> error "star: TODO implement arr*str join"
@@ -318,7 +320,7 @@ star = order $ \o -> case o of
   ArrBlk x y -> fold x y
   StrBlk x y -> fold (strToArr x) y
   -- ???
-  BlkBlk _ y -> mapM_ (spush . Int . c2i) $ uneval y
+  BlkBlk _ y -> mapM_ (spush . Int . c2i) $ y ^. blockStr
     -- {anything}{abc}* ==> [97 98 99]~
     -- convert y to str, push each char int to stack
     -- probably a bug, but we'll copy it for now!
@@ -378,11 +380,11 @@ less = order $ \o -> case o of
   IntInt x y -> spush $ unbool $ x < y
   ArrArr x y -> spush $ unbool $ x < y
   StrStr x y -> spush $ unbool $ x < y
-  BlkBlk x y -> spush $ unbool $ uneval x < uneval y
+  BlkBlk x y -> spush $ unbool $ x^.blockStr < y^.blockStr
   -- select elements in a sequence with index < n
   IntArr x y -> spush $ Arr $ index x y
   IntStr x y -> spush $ Str $ index x y
-  IntBlk x y -> spush $ Blk $ eval $ index x $ uneval y
+  IntBlk x y -> spush $ Blk $ strBlock $ index x $ y^.blockStr
   _ -> undefined -- TODO
   where index n xs = if n < 0
           then genericTake (n + genericLength xs) xs
@@ -394,11 +396,11 @@ greater = order $ \o -> case o of
   IntInt x y -> spush $ unbool $ x > y
   ArrArr x y -> spush $ unbool $ x > y
   StrStr x y -> spush $ unbool $ x > y
-  BlkBlk x y -> spush $ unbool $ uneval x > uneval y
+  BlkBlk x y -> spush $ unbool $ x^.blockStr < y^.blockStr
   -- select elements in a sequence with index >= n
   IntArr x y -> spush $ Arr $ index x y
   IntStr x y -> spush $ Str $ index x y
-  IntBlk x y -> spush $ Blk $ eval $ index x $ uneval y
+  IntBlk x y -> spush $ Blk $ strBlock $ index x $ y^.blockStr
   _ -> undefined -- TODO
   where index n xs = if n < 0
           then genericDrop (n + genericLength xs) xs
@@ -410,13 +412,13 @@ equal = order $ \o -> case o of
   IntInt x y -> spush $ unbool $ x == y
   ArrArr x y -> spush $ unbool $ x == y
   StrStr x y -> spush $ unbool $ x == y
-  BlkBlk x y -> spush $ unbool $ uneval x == uneval y
+  BlkBlk x y -> spush $ unbool $ x^.blockStr == y^.blockStr
   ArrStr x y -> spush $ unbool $ x == strToArr y
-  StrBlk x y -> spush $ unbool $ x == uneval y
+  StrBlk x y -> spush $ unbool $ x == y^.blockStr
   -- For int and sequence, get at index.
   IntArr x y -> maybe (return ()) spush $ index x y
   IntStr x y -> maybe (return ()) (spush . Int . c2i) $ index x y
-  IntBlk x y -> maybe (return ()) (spush . Int . c2i) $ index x $ uneval y
+  IntBlk x y -> maybe (return ()) (spush . Int . c2i) $ index x $ y^.blockStr
   -- ???
   ArrBlk _ _ -> error "equal: undefined operation int=blk"
   where index n xs = lookup n $ if n < 0
@@ -506,10 +508,10 @@ prelude =
   , (">", prim greater)
   , ("=", prim equal)
   , ("?", prim question)
-  , ("and", Blk $ eval "1$if")
-  , ("or", Blk $ eval "1$\\if")
-  , ("xor", Blk $ eval "\\!!{!}*")
-  , ("n", Blk [Push $ Str "\n"])
+  , ("and", Blk $ strBlock "1$if")
+  , ("or", Blk $ strBlock "1$\\if")
+  , ("xor", Blk $ strBlock "\\!!{!}*")
+  , ("n", Blk $ strBlock "\"\\n\"")
   , ("do", prim primDo)
   , ("if", prim primIf)
   , ("abs", prim primAbs)
@@ -523,8 +525,8 @@ prelude =
 preludeIO :: [(String, Val IO)]
 preludeIO = prelude ++
   [ ("print", prim primPrint)
-  , ("puts", Blk $ eval "print n print")
-  , ("p", Blk $ eval "`puts")
+  , ("puts", Blk $ strBlock "print n print")
+  , ("p", Blk $ strBlock "`puts")
   , ("rand", prim primRand)
   ]
 

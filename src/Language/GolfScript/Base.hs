@@ -12,16 +12,21 @@ data Val m
   = Int Integer
   | Arr [Val m]
   | Str String
-  | Blk [Do m]
+  | Blk (Block m)
   deriving (Eq, Ord, Show, Read)
 
 -- | A program command, parametrized by a monad for primitive functions.
 data Do m
-  = Push (Val m) -- ^ Push a value onto the stack.
-  | Get String -- ^ Read a variable.
-  | Set String -- ^ Write to a variable.
+  = Push (Val m)  -- ^ Push a value onto the stack.
+  | Get  String   -- ^ Read a variable.
+  | Set  String   -- ^ Write to a variable.
   | Prim (Prim m) -- ^ A primitive built-in function.
   deriving (Eq, Ord, Show, Read)
+
+data Block m = Block
+  { blockDo_ :: [Do m]
+  , blockStr_ :: String
+  } deriving (Eq, Ord, Show, Read)
 
 -- | An opaque built-in monadic function. Because of the way the stack works, a
 -- program can only execute Prim values; it can never handle them directly.
@@ -54,6 +59,15 @@ brackets = accessor brackets_ $ \x g -> g { brackets_ = x }
 variables :: Accessor (Golf m) (M.Map String (Val m))
 variables = accessor variables_ $ \x g -> g { variables_ = x }
 
+blockDo :: Accessor (Block m) [Do m]
+blockDo = accessor blockDo_ $ \x b -> b { blockDo_ = x }
+
+blockStr :: Accessor (Block m) String
+blockStr = accessor blockStr_ $ \x b -> b { blockStr_ = x }
+
+doBlock :: [Do m] -> Block m
+doBlock dos = Block { blockDo_ = dos, blockStr_ = uneval dos }
+
 -- | An initial state with an empty stack and no predefined variables.
 empty :: Golf m
 empty = Golf [] [] M.empty
@@ -74,7 +88,7 @@ run :: (Monad m) => Do m -> Golf m -> m (Golf m)
 run d g = case d of
   Get v -> case M.lookup v $ g ^. variables of
     Nothing -> return g -- undefined variable, no effect
-    Just (Blk b) -> runs b g -- execute block
+    Just (Blk b) -> runs (b ^. blockDo) g -- execute block
     Just x -> return $ push x g -- push x onto stack
   Set v -> return $ case pop g of -- pop a val, push back on, and assign
     Just (x, g') -> variables ^: M.insert v x $ g'
@@ -105,7 +119,7 @@ unparse = concatMap $ \d -> case d of
     Arr a -> [Var "["] ++ inner ++ [Var "]"]
       where inner = unparse $ intersperse (Get " ") (map Push a)
     Str s -> [StrLit s]
-    Blk b -> [LBrace] ++ unparse b ++ [RBrace]
+    Blk b -> [LBrace] ++ unparse (b ^. blockDo) ++ [RBrace]
 
 --- | Produces a program which executes a series of actions, with two conditions:
 --- the array bracket operators aren't overwritten, and the space character
@@ -119,7 +133,7 @@ output :: Val m -> String
 output (Int i) = show i
 output (Arr a) = concatMap output a
 output (Str s) = s
-output (Blk b) = "{" ++ unscan (unparse b) ++ "}"
+output (Blk b) = "{" ++ (b ^. blockStr) ++ "}"
 
 stackToArr :: Golf m -> Val m
 stackToArr = Arr . reverse . getVal stack
