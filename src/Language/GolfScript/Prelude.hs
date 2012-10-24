@@ -174,36 +174,36 @@ rb = gets (^. brackets) >>= \bts -> case bts of
     spush $ Arr $ reverse arr -- reverse them and push on the new array
 
 -- | @.@ duplicates the top value, by 1 pop and 2 pushes
-dot :: (Monad m) => S m ()
-dot = unary $ \x -> spush x >> spush x
+dot :: (Monad m) => Val m -> S m ()
+dot x = spush x >> spush x
 
 -- | @~@ bitwise not (int), eval (blk\/str), push each (arr)
-tilde :: (Monad m) => S m ()
-tilde = unary $ \x -> case x of
+tilde :: (Monad m) => Val m -> S m ()
+tilde x = case x of
   Int i -> spush $ Int $ complement i
   Arr a -> mapM_ spush a
   Blk b -> execute b
   Str s -> execute $ strBlock s
 
 -- | @!@ boolean not: if in {@0@, @[]@, @\"\"@, @{}@}, push 1. else push 0.
-bang :: (Monad m) => S m ()
-bang = unary $ \x -> spush $ Int $ if bool x then 0 else 1
+bang :: (Monad m) => Val m -> S m ()
+bang x = spush $ Int $ if bool x then 0 else 1
 
 -- | @\@@ bring third value to top: @[z, y, x, ...]@ becomes @[x, z, y, ...]@
-at :: (Monad m) => S m ()
-at = ternary $ \x y z -> spush y >> spush z >> spush x
+at :: (Monad m) => Val m -> Val m -> Val m -> S m ()
+at x y z = spush y >> spush z >> spush x
 
 -- | @\\@ swap top two elements: @[y, x, ...]@ becomes @[x, y, ...]@
-backslash :: (Monad m) => S m ()
-backslash = binary $ \x y -> spush y >> spush x
+backslash :: (Monad m) => Val m -> Val m -> S m ()
+backslash x y = spush y >> spush x
 
 -- | @;@ pop and discard top element
 semicolon :: (Monad m) => S m ()
 semicolon = spop >> return ()
 
 -- | @,@ make @[0..n]@ (int), length (arr\/str), filter arr\/str by key (blk)
-comma :: (Monad m) => S m ()
-comma = unary $ \x -> case x of
+comma :: (Monad m) => Val m -> S m ()
+comma x = case x of
   Int i -> spush $ Arr $ map Int [0 .. i-1]
   Arr a -> spush $ Int $ fromIntegral $ length a
   Str s -> spush $ Int $ fromIntegral $ length s
@@ -345,7 +345,7 @@ slash = order $ \o -> case o of
   StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> execute y
   -- blk/blk: unfold
   BlkBlk cond body -> go >>= \xs -> semicolon >> spush (Arr xs) where
-    go = dot >> predicate cond >>= \b ->
+    go = unary dot >> predicate cond >>= \b ->
       if b then liftM2 (:) top $ execute body >> go else return []
   -- int/blk: error
   IntBlk _ _ -> error "slash: can't execute <int>/<blk>"
@@ -485,13 +485,13 @@ prelude :: (Monad m) => [(String, Val m)]
 prelude =
   [ ("[", prim lb)
   , ("]", prim rb)
-  , (".", prim dot)
-  , ("~", prim tilde)
-  , ("!", prim bang)
-  , ("@", prim at)
-  , ("\\", prim backslash)
+  , (".", prim $ unary dot)
+  , ("~", prim $ unary tilde)
+  , ("!", prim $ unary bang)
+  , ("@", prim $ ternary at)
+  , ("\\", prim $ binary backslash)
   , (";", prim semicolon)
-  , (",", prim comma)
+  , (",", prim $ unary comma)
   , ("(", prim lp)
   , (")", prim rp)
   , ("`", prim backtick)
