@@ -77,19 +77,17 @@ unbool b = Int $ if b then 1 else 0
 execute :: (Monad m) => Block m -> StateT (Golf m) m ()
 execute blk = StateT $ runs (blk ^. blockDo) >=> \s -> return ((), s)
 
--- | Pop a value off the stack and use it. If the stack is empty, does nothing.
-unary :: (Monad m) => (Val m -> S m ()) -> S m ()
-unary f = spop >>= maybe (return ()) f
+-- | Pop a value off the stack and use it.
+unary :: (Monad m) => (Val m -> S m a) -> S m a
+unary f = spop' >>= f
 
--- | Pop two values off the stack and use them. If there's only one value on the
--- stack, it's popped back on and nothing is executed.
-binary :: (Monad m) => (Val m -> Val m -> S m ()) -> S m ()
-binary f = unary $ \y -> spop >>= maybe (spush y) (\x -> f x y)
+-- | Pop two values off the stack and use them.
+binary :: (Monad m) => (Val m -> Val m -> S m a) -> S m a
+binary f = unary $ \y -> unary $ \x -> f x y
 
--- | Pop three values off the stack and use them. If there's only one or two
--- values on the stack, they're popped back on and nothing is executed.
-ternary :: (Monad m) => (Val m -> Val m -> Val m -> S m ()) -> S m ()
-ternary f = binary $ \y z -> spop >>= maybe (spush y >> spush z) (\x -> f x y z)
+-- | Pop three values off the stack and use them.
+ternary :: (Monad m) => (Val m -> Val m -> Val m -> S m a) -> S m a
+ternary f = binary $ \y z -> unary $ \x -> f x y z
 
 -- | Converts a string to a array of integers.
 strToArr :: String -> [Val m]
@@ -118,8 +116,8 @@ c2i = fromIntegral . fromEnum
 i2c :: Integer -> Char
 i2c = toEnum . (.&. 0xFF) . fromIntegral
 
-coerce :: (Monad m) => (Coerced m -> S m ()) -> S m ()
-coerce f = binary $ \x y -> f $ case (x, y) of
+coerce :: (Monad m) => S m (Coerced m)
+coerce = binary $ \x y -> return $ case (x, y) of
   (Int a, Int b) -> Ints a b
   (Int _, Arr b) -> Arrs [x] b
   (Int a, Str b) -> Strs (show a) b
@@ -255,51 +253,66 @@ sortOnM :: (Ord b, Monad m) => (a -> m b) -> [a] -> m [a]
 sortOnM f xs = mapM f xs >>= \ys ->
   return $ map fst $ sortBy (comparing snd) $ zip xs ys
 
--- | @+@ coerce: add (ints), concat (arrs\/strs\/blks)
-plus :: (Monad m) => S m ()
-plus = coerce $ \c -> case c of
-  Ints x y -> spush $ Int $ x + y
-  Arrs x y -> spush $ Arr $ x ++ y
-  Strs x y -> spush $ Str $ x ++ y
-  Blks x y -> spush $ Blk $ Block
+plus' :: Coerced m -> Val m
+plus' c = case c of
+  Ints x y -> Int $ x + y
+  Arrs x y -> Arr $ x ++ y
+  Strs x y -> Str $ x ++ y
+  Blks x y -> Blk $ Block
     { blockStr_ = (x ^. blockStr) ++ " " ++ (y ^. blockStr)
     , blockDo_ = (x ^. blockDo) ++ [Get " "] ++ (y ^. blockDo) }
 
+-- | @+@ coerce: add (ints), concat (arrs\/strs\/blks)
+plus :: (Monad m) => S m ()
+plus = coerce >>= spush . plus'
+
+pipe' :: Coerced m -> Val m
+pipe' c = case c of
+  Ints x y -> Int $ x .|. y
+  Arrs x y -> Arr $ op x y
+  Strs x y -> Str $ op x y
+  Blks x y -> Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
+  where op x y = nub $ union x y
+
 -- | @|@ coerce: bitwise or (ints), setwise or (arrs\/strs\/blks)
 pipe :: (Monad m) => S m ()
-pipe = coerce $ \c -> case c of
-  Ints x y -> spush $ Int $ x .|. y
-  Arrs x y -> spush $ Arr $ op x y
-  Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
-  where op x y = nub $ union x y
+pipe = coerce >>= spush . pipe'
+
+ampersand' :: Coerced m -> Val m
+ampersand' c = case c of
+  Ints x y -> Int $ x .&. y
+  Arrs x y -> Arr $ op x y
+  Strs x y -> Str $ op x y
+  Blks x y -> Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
+  where op x y = nub $ intersect x y
 
 -- | @|@ coerce: bitwise and (ints), setwise and (arrs\/strs\/blks)
 ampersand :: (Monad m) => S m ()
-ampersand = coerce $ \c -> case c of
-  Ints x y -> spush $ Int $ x .&. y
-  Arrs x y -> spush $ Arr $ op x y
-  Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
-  where op x y = nub $ intersect x y
+ampersand = coerce >>= spush . ampersand'
+
+caret' :: Coerced m -> Val m
+caret' c = case c of
+  Ints x y -> Int $ xor x y
+  Arrs x y -> Arr $ op x y
+  Strs x y -> Str $ op x y
+  Blks x y -> Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
+  where op x y = nub $ union x y \\ intersect x y
 
 -- | @^@ coerce: bitwise xor (ints), setwise xor (arrs\/strs\/blks)
 caret :: (Monad m) => S m ()
-caret = coerce $ \c -> case c of
-  Ints x y -> spush $ Int $ xor x y
-  Arrs x y -> spush $ Arr $ op x y
-  Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
-  where op x y = nub $ union x y \\ intersect x y
+caret = coerce >>= spush . caret'
+
+minus' :: Coerced m -> Val m
+minus' c = case c of
+  Ints x y -> Int $ x - y
+  Arrs x y -> Arr $ op x y
+  Strs x y -> Str $ op x y
+  Blks x y -> Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
+  where op x y = filter (`notElem` y) x
 
 -- | @^@ coerce: subtract (ints), setwise difference (arrs\/strs\/blks)
 minus :: (Monad m) => S m ()
-minus = coerce $ \c -> case c of
-  Ints x y -> spush $ Int $ x - y
-  Arrs x y -> spush $ Arr $ op x y
-  Strs x y -> spush $ Str $ op x y
-  Blks x y -> spush $ Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
-  where op x y = filter (`notElem` y) x
+minus = coerce >>= spush . minus'
 
 -- | @*@ order: multiply (int*int), run n times (int*blk), multiply and join
 -- (int*seq), join with separator (seq*seq), fold (seq*blk)
