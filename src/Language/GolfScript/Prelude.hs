@@ -53,12 +53,11 @@ prim s = Blk $ doBlock [Prim $ P $ execStateT s]
 spush :: (Monad m) => Val m -> S m ()
 spush x = modify (push x)
 
-spop' :: (Monad m) => S m (Val m)
-spop' = gets pop >>=
-  maybe (error "spop': empty stack") (\(x, g) -> put g >> return x)
-
 spop :: (Monad m) => S m (Maybe (Val m))
 spop = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
+
+spop' :: (Monad m) => S m (Val m)
+spop' = liftM (fromMaybe (error "spop': empty stack")) spop
 
 -- | Returns the top value of the stack, without doing a pop operation.
 -- Bracket boundaries aren't changed.
@@ -83,11 +82,11 @@ unary f = spop' >>= f
 
 -- | Pop two values off the stack and use them.
 binary :: (Monad m) => (Val m -> Val m -> S m a) -> S m a
-binary f = unary $ \y -> unary $ \x -> f x y
+binary f = join $ liftM2 f spop' spop'
 
 -- | Pop three values off the stack and use them.
 ternary :: (Monad m) => (Val m -> Val m -> Val m -> S m a) -> S m a
-ternary f = binary $ \y z -> unary $ \x -> f x y z
+ternary f = join $ liftM3 f spop' spop' spop'
 
 -- | Converts a string to a array of integers.
 strToArr :: String -> [Val m]
@@ -205,13 +204,12 @@ comma x = case x of
   Int i -> spush $ Arr $ map Int [0 .. i-1]
   Arr a -> spush $ Int $ fromIntegral $ length a
   Str s -> spush $ Int $ fromIntegral $ length s
-  Blk b -> spop >>= \mb -> case mb of -- take array a, then: filterBy b a
-    Just (Int _) -> error "comma: can't execute '<int><blk>,'" -- .rb error
-    Just (Arr a) -> blkFilter a >>= spush . Arr
-    Just (Str s) -> blkFilter (strToArr s) >>= spush . Str . arrToStr
-    Just (Blk b') -> blkFilter (strToArr $ b' ^. blockStr) >>=
+  Blk b -> spop' >>= \y -> case y of -- take array a, then: filterBy b a
+    Int _ -> error "comma: undefined operation '<int><blk>,'"
+    Arr a -> blkFilter a >>= spush . Arr
+    Str s -> blkFilter (strToArr s) >>= spush . Str . arrToStr
+    Blk b' -> blkFilter (strToArr $ b' ^. blockStr) >>=
       spush . Blk . strBlock . arrToStr
-    Nothing -> spush x -- .rb error
     where blkFilter = filterM $ \v -> spush v >> predicate b
 
 -- | @(@ decrement (int), uncons from left (arr\/str)
@@ -359,9 +357,10 @@ slash = order $ \o -> case o of
   -- blk/blk: unfold
   BlkBlk cond body -> go >>= \xs -> semicolon >> spush (Arr xs) where
     go = unary dot >> predicate cond >>= \b ->
+      -- TODO: is the then-clause here correct?
       if b then liftM2 (:) top $ execute body >> go else return []
   -- int/blk: error
-  IntBlk _ _ -> error "slash: can't execute <int>/<blk>"
+  IntBlk _ _ -> error "slash: undefined operation '<int><blk>/'"
 
 percent :: (Monad m) => S m ()
 percent = order $ \o -> case o of
@@ -382,8 +381,8 @@ percent = order $ \o -> case o of
   ArrBlk x y -> lb >> forM_ x (\v -> spush v >> execute y) >> rb
   StrBlk x y -> lb >> forM_ (strToArr x) (\v -> spush v >> execute y) >> rb
   -- int/blk: error
-  IntBlk _ _ -> error "percent: undefined operation int%blk"
-  BlkBlk _ _ -> error "percent: undefined operation blk%blk"
+  IntBlk _ _ -> error "percent: undefined operation '<int><blk>%'"
+  BlkBlk _ _ -> error "percent: undefined operation '<blk><blk>%'"
   where every i xs = map head $ chunksOf i xs
         cleanSplitOn xs ys = filter (not . null) $ splitOn xs ys
 
