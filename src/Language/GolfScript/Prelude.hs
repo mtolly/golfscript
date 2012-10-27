@@ -115,7 +115,7 @@ c2i = fromIntegral . fromEnum
 i2c :: Integer -> Char
 i2c = toEnum . (.&. 0xFF) . fromIntegral
 
-coerce' :: (Monad m) => Val m -> Val m -> Coerced m
+coerce' :: Val m -> Val m -> Coerced m
 coerce' x y = case (x, y) of
   (Int a, Int b) -> Ints a b
   (Int _, Arr b) -> Arrs [x] b
@@ -124,18 +124,31 @@ coerce' x y = case (x, y) of
   (Arr a, Int _) -> Arrs a [y]
   (Arr a, Arr b) -> Arrs a b
   (Arr a, Str b) -> Strs (arrToStr a) b
-  (Arr _, Blk _) -> error "coerce: TODO implement arr->blk conversion"
+  (Arr a, Blk b) -> Blks (strBlock $ output $ star' a " ") b
+  -- [(self*Gstring.new(' ')).to_s.compile,b]
   (Str a, Int b) -> Strs a (show b)
   (Str a, Arr b) -> Strs a (arrToStr b)
   (Str a, Str b) -> Strs a b
   (Str a, Blk b) -> Blks (strBlock a) b
   (Blk a, Int _) -> Blks a (doBlock [Push y])
-  (Blk _, Arr _) -> error "coerce: TODO implement arr->blk conversion"
+  (Blk a, Arr b) -> Blks a (strBlock $ output $ star' b " ")
   (Blk a, Str b) -> Blks a (strBlock b)
   (Blk a, Blk b) -> Blks a b
+  where star' :: [Val m] -> String -> Val m
+        star' a b = case a of
+          [] -> Str ""
+          r:rs -> foldl (\v i -> (v +! Str b) +! i) (r `coerceTo` Str b) rs
+        a +! b = plus' $ coerce' a b
 
 coerce :: (Monad m) => S m (Coerced m)
 coerce = binary $ \x y -> return $ coerce' x y
+
+coerceTo :: Val m -> Val m -> Val m
+x `coerceTo` y = case coerce' x y of
+  Ints x' _ -> Int x'
+  Arrs x' _ -> Arr x'
+  Strs x' _ -> Str x'
+  Blks x' _ -> Blk x'
 
 order :: (Monad m) => (Ordered m -> S m ()) -> S m ()
 order f = binary $ \x y -> f $ case (x, y) of
@@ -353,11 +366,6 @@ star = order $ \o -> case o of
         fold (x : xs) blk = do
           spush x
           forM_ xs $ \y -> spush y >> execute blk
-        x `coerceTo` y = case coerce' x y of
-          Ints x' _ -> Int x'
-          Arrs x' _ -> Arr x'
-          Strs x' _ -> Str x'
-          Blks x' _ -> Blk x'
         x +! y = plus' $ coerce' x y
 
 slash :: (Monad m) => S m ()
@@ -408,7 +416,7 @@ percent' o = case o of
         cleanSplitOn xs ys = filter (not . null) $ splitOn xs ys
 
 percent :: (Monad m) => S m ()
-percent = order $ \o -> percent' o >>= spush
+percent = order $ percent' >=> spush
 
 less :: (Monad m) => S m ()
 less = order $ \o -> case o of
@@ -509,7 +517,7 @@ primWhile = binary f where
 primUntil :: (Monad m) => S m ()
 primUntil = binary f where
   f (Blk cond) (Blk body) = go where
-    go = predicate cond >>= \b -> when (not b) $ execute body >> go
+    go = predicate cond >>= \b -> unless b $ execute body >> go
   f _ _ = error "primUntil: 'until' expected 2 block arguments"
 
 primPrint :: S IO ()
