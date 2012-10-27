@@ -115,8 +115,8 @@ c2i = fromIntegral . fromEnum
 i2c :: Integer -> Char
 i2c = toEnum . (.&. 0xFF) . fromIntegral
 
-coerce :: (Monad m) => S m (Coerced m)
-coerce = binary $ \x y -> return $ case (x, y) of
+coerce' :: (Monad m) => Val m -> Val m -> Coerced m
+coerce' x y = case (x, y) of
   (Int a, Int b) -> Ints a b
   (Int _, Arr b) -> Arrs [x] b
   (Int a, Str b) -> Strs (show a) b
@@ -133,6 +133,9 @@ coerce = binary $ \x y -> return $ case (x, y) of
   (Blk _, Arr _) -> error "coerce: TODO implement arr->blk conversion"
   (Blk a, Str b) -> Blks a (strBlock b)
   (Blk a, Blk b) -> Blks a b
+
+coerce :: (Monad m) => S m (Coerced m)
+coerce = binary $ \x y -> return $ coerce' x y
 
 order :: (Monad m) => (Ordered m -> S m ()) -> S m ()
 order f = binary $ \x y -> f $ case (x, y) of
@@ -324,8 +327,19 @@ star = order $ \o -> case o of
   -- run a block n times
   IntBlk x y -> replicateM_ (fromIntegral x) $ execute y
   -- join two sequences
-  ArrArr _ _ -> error "star: TODO implement arr*arr join"
-  ArrStr _ _ -> error "star: TODO implement arr*str join"
+    -- return b*self if self.class == Gstring && b.class == Garray
+    -- return self/Gint.new(1)*b if self.class == Gstring
+    -- return b.factory([]) if @val.size<1
+    -- r=@val.first
+    -- r,x=r.coerce(b) if r.class != b.class #for size 1
+    -- @val[1..-1].each{|i|r=r+b+i}
+    -- r
+  ArrArr x y -> spush $ case x of
+    [] -> Arr []
+    r:rs -> foldl (\v i -> (v +! Arr y) +! i) (r `coerceTo` Arr y) rs
+  ArrStr x y -> spush $ case x of
+    [] -> Str ""
+    r:rs -> foldl (\v i -> (v +! Str y) +! i) (r `coerceTo` Str y) rs
   StrStr x y -> spush $ Str $ intercalate y $ map (:"") x
   -- fold
   ArrBlk x y -> fold x y
@@ -339,6 +353,12 @@ star = order $ \o -> case o of
         fold (x : xs) blk = do
           spush x
           forM_ xs $ \y -> spush y >> execute blk
+        x `coerceTo` y = case coerce' x y of
+          Ints x' _ -> Int x'
+          Arrs x' _ -> Arr x'
+          Strs x' _ -> Str x'
+          Blks x' _ -> Blk x'
+        x +! y = plus' $ coerce' x y
 
 slash :: (Monad m) => S m ()
 slash = order $ \o -> case o of
