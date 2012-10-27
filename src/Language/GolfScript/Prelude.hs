@@ -362,29 +362,33 @@ slash = order $ \o -> case o of
   -- int/blk: error
   IntBlk _ _ -> error "slash: undefined operation '<int><blk>/'"
 
-percent :: (Monad m) => S m ()
-percent = order $ \o -> case o of
+percent' :: (Monad m) => Ordered m -> S m (Val m)
+percent' o = case o of
   -- int/int: modulo
-  IntInt x y -> spush $ Int $ mod x y
+  IntInt x y -> return $ Int $ mod x y
   -- int/seq: select elems from y whose index mod x is 0
   IntArr x y -> if x < 0
-    then spush $ Arr $ every (fromIntegral $ abs x) $ reverse y
-    else spush $ Arr $ every (fromIntegral x) y
+    then return $ Arr $ every (fromIntegral $ abs x) $ reverse y
+    else return $ Arr $ every (fromIntegral x) y
   IntStr x y -> if x < 0
-    then spush $ Str $ every (fromIntegral $ abs x) $ reverse y
-    else spush $ Str $ every (fromIntegral x) y
+    then return $ Str $ every (fromIntegral $ abs x) $ reverse y
+    else return $ Str $ every (fromIntegral x) y
   -- seq/seq: split x on occurrences of y, but get rid of empty segments
-  ArrArr x y -> spush $ Arr $ map Arr $ cleanSplitOn y x
-  ArrStr x y -> spush $ Arr $ map Arr $ cleanSplitOn (strToArr y) x
-  StrStr x y -> spush $ Arr $ map Str $ cleanSplitOn y x
+  ArrArr x y -> return $ Arr $ map Arr $ cleanSplitOn y x
+  ArrStr x y -> return $ Arr $ map Arr $ cleanSplitOn (strToArr y) x
+  StrStr x y -> return $ Arr $ map Str $ cleanSplitOn y x
   -- seq/blk: map elements
-  ArrBlk x y -> lb >> forM_ x (\v -> spush v >> execute y) >> rb
-  StrBlk x y -> lb >> forM_ (strToArr x) (\v -> spush v >> execute y) >> rb
+  ArrBlk x y -> lb >> forM_ x (\v -> spush v >> execute y) >> rb >> spop'
+  StrBlk x y ->
+    lb >> forM_ (strToArr x) (\v -> spush v >> execute y) >> rb >> spop'
   -- int/blk: error
   IntBlk _ _ -> error "percent: undefined operation '<int><blk>%'"
   BlkBlk _ _ -> error "percent: undefined operation '<blk><blk>%'"
   where every i xs = map head $ chunksOf i xs
         cleanSplitOn xs ys = filter (not . null) $ splitOn xs ys
+
+percent :: (Monad m) => S m ()
+percent = order $ \o -> percent' o >>= spush
 
 less :: (Monad m) => S m ()
 less = order $ \o -> case o of
@@ -444,8 +448,16 @@ question = order $ \o -> case o of
   -- For int and seq, find element and push index.
   IntArr x y -> spush $ Int $ fromMaybe (-1) $ lookup (Int x) $ zip y [0..]
   IntStr x y -> spush $ Int $ fromMaybe (-1) $ lookup (i2c x) $ zip y [0..]
+  IntBlk x y ->
+    spush $ Int $ fromMaybe (-1) $ lookup (i2c x) $ zip (y^.blockStr) [0..]
   -- For seq and blk, find element and push index.
-  _ -> undefined -- TODO
+  ArrBlk _ _ -> error "question: TODO <arr><blk>?"
+  StrBlk _ _ -> error "question: TODO <str><blk>?"
+  BlkBlk _ _ -> error "question: TODO <blk><blk>?"
+  -- Undefined
+  ArrArr _ _ -> error "question: undefined <arr><arr>?"
+  ArrStr _ _ -> error "question: undefined <arr><str>?"
+  StrStr _ _ -> error "question: undefined <str><str>?"
 
 primDo :: (Monad m) => S m ()
 primDo = unary $ \x -> case x of
