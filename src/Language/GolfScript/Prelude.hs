@@ -82,11 +82,11 @@ unary f = spop' >>= f
 
 -- | Pop two values off the stack and use them.
 binary :: (Monad m) => (Val m -> Val m -> S m a) -> S m a
-binary f = join $ liftM2 f spop' spop'
+binary f = do { y <- spop'; x <- spop'; f x y }
 
 -- | Pop three values off the stack and use them.
 ternary :: (Monad m) => (Val m -> Val m -> Val m -> S m a) -> S m a
-ternary f = join $ liftM3 f spop' spop' spop'
+ternary f = do { z <- spop'; y <- spop'; x <- spop'; f x y z }
 
 -- | Converts a string to a array of integers.
 strToArr :: String -> [Val m]
