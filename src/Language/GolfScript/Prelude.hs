@@ -482,10 +482,10 @@ question = order $ \o -> case o of
   ArrBlk _ _ -> error "question: TODO <arr><blk>?"
   StrBlk _ _ -> error "question: TODO <str><blk>?"
   BlkBlk _ _ -> error "question: TODO <blk><blk>?"
-  -- Undefined
-  ArrArr _ _ -> error "question: undefined <arr><arr>?"
-  ArrStr _ _ -> error "question: undefined <arr><str>?"
-  StrStr _ _ -> error "question: undefined <str><str>?"
+  -- For two seqs, find subsequence and push index.
+  ArrArr _ _ -> error "question: TODO <arr><arr>?"
+  ArrStr _ _ -> error "question: TODO <arr><str>?"
+  StrStr _ _ -> error "question: TODO <str><str>?"
 
 primDo :: (Monad m) => S m ()
 primDo = unary $ \x -> case x of
