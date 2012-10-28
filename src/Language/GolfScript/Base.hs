@@ -6,6 +6,7 @@ import Control.Monad
 import Data.List (intersperse)
 import Data.Accessor
 import Language.GolfScript.Scan
+import Control.Applicative ((<|>))
 
 -- | A value, parametrized by a monad for primitive functions.
 data Val m
@@ -18,7 +19,8 @@ data Val m
 -- | A program command, parametrized by a monad for primitive functions.
 data Do m
   = Push (Val m)  -- ^ Push a value onto the stack.
-  | Get  String   -- ^ Read a variable.
+  | Get  String (Maybe (Val m))
+  -- ^ Read a variable, with a possible default value.
   | Set  String   -- ^ Write to a variable.
   | Prim (Prim m) -- ^ A primitive built-in function.
   deriving (Eq, Ord, Show, Read)
@@ -90,12 +92,12 @@ pop g = case g ^. stack of
 -- | Run a single command.
 run :: (Monad m) => Do m -> Golf m -> m (Golf m)
 run d g = case d of
-  Get v -> case M.lookup v $ g ^. variables of
-    Nothing -> return g -- undefined variable, no effect
+  Get v def -> case (M.lookup v $ g ^. variables) <|> def of
+    Nothing -> return g
     Just (Blk b) -> runs (b ^. blockDo) g -- execute block
-    Just x -> return $ push x g -- push x onto stack
-  Set v -> return $ case pop g of -- pop a val, push back on, and assign
-    Just (x, g') -> variables ^: M.insert v x $ g'
+    Just x       -> return $ push x g     -- push x onto stack
+  Set v -> return $ case pop g of
+    Just (x, _) -> variables ^: M.insert v x $ g
     Nothing -> g
   Prim (P f) -> f g
   Push x -> return $ push x g
@@ -107,7 +109,7 @@ runs = foldr (>=>) return . map run
 unscan :: [Token] -> String
 unscan = concatMap $ \t -> case t of
   Var x -> x
-  IntLit i -> show i
+  IntLit (_, s) -> s
   StrLit s -> show s
   LBrace -> "{"
   RBrace -> "}"
@@ -115,13 +117,13 @@ unscan = concatMap $ \t -> case t of
 
 unparse :: [Do m] -> [Token]
 unparse = concatMap $ \d -> case d of
-  Get x -> [Var x]
+  Get x _ -> [Var x]
   Set x -> [Colon, Var x]
   Prim _ -> error "unparse: can't unparse Prim"
   Push v -> case v of
-    Int i -> [IntLit i]
+    Int i -> [IntLit (i, show i)]
     Arr a -> [Var "["] ++ inner ++ [Var "]"]
-      where inner = unparse $ intersperse (Get " ") (map Push a)
+      where inner = unparse $ intersperse (Get " " Nothing) (map Push a)
     Str s -> [StrLit s]
     Blk b -> [LBrace] ++ unparse (b ^. blockDo) ++ [RBrace]
 

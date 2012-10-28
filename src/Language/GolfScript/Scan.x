@@ -17,7 +17,7 @@ tokens :-
 \{ { const LBrace }
 \} { const RBrace }
 
-\-? $digit+                       { IntLit . read }
+\-? $digit+                       { \str -> IntLit (read str, str) }
 $alphascore ($alphascore|$digit)+ { Var }
 \" (\\ . | ([^\\\"] | \n))* \"    { StrLit . read }
 \' (\\ . | ([^\\\'] | \n))* \'    { StrLit . rawString }
@@ -28,7 +28,7 @@ $alphascore ($alphascore|$digit)+ { Var }
 
 data Token
   = Var String
-  | IntLit Integer
+  | IntLit (Integer, String)
   | StrLit String
   | LBrace
   | RBrace

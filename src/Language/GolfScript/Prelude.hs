@@ -274,7 +274,7 @@ plus' c = case c of
   Strs x y -> Str $ x ++ y
   Blks x y -> Blk $ Block
     { blockStr_ = (x ^. blockStr) ++ " " ++ (y ^. blockStr)
-    , blockDo_ = (x ^. blockDo) ++ [Get " "] ++ (y ^. blockDo) }
+    , blockDo_ = (x ^. blockDo) ++ [Get " " Nothing] ++ (y ^. blockDo) }
 
 -- | @+@ coerce: add (ints), concat (arrs\/strs\/blks)
 plus :: (Monad m) => S m ()

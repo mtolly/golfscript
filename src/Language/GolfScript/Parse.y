@@ -24,10 +24,11 @@ import Data.List (intersperse)
 DoList : Do DoList { $1 : $2 }
        | { [] }
 
-Do : int { Push (Int $1) }
+Do : int { case $1 of (i, s) -> Get s (Just $ Int i) }
    | str { Push (Str $1) }
-   | var { Get $1 }
+   | var { Get $1 Nothing }
    | ':' var { Set $2 }
+   | ':' int { Set (snd $2) }
    | '{' DoList '}' { Push (Blk $ doBlock $2) }
 
 {
