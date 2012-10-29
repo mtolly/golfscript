@@ -340,13 +340,6 @@ star = order $ \o -> case o of
   -- run a block n times
   IntBlk x y -> replicateM_ (fromIntegral x) $ execute y
   -- join two sequences
-    -- return b*self if self.class == Gstring && b.class == Garray
-    -- return self/Gint.new(1)*b if self.class == Gstring
-    -- return b.factory([]) if @val.size<1
-    -- r=@val.first
-    -- r,x=r.coerce(b) if r.class != b.class #for size 1
-    -- @val[1..-1].each{|i|r=r+b+i}
-    -- r
   ArrArr x y -> spush $ case x of
     [] -> Arr []
     r:rs -> foldl (\v i -> (v +! Arr y) +! i) (r `coerceTo` Arr y) rs
@@ -357,11 +350,7 @@ star = order $ \o -> case o of
   -- fold
   ArrBlk x y -> fold x y
   StrBlk x y -> fold (strToArr x) y
-  -- ???
-  BlkBlk _ y -> mapM_ (spush . Int . c2i) $ y ^. blockStr
-    -- {anything}{abc}* ==> [97 98 99]~
-    -- convert y to str, push each char int to stack
-    -- probably a bug, but we'll copy it for now!
+  BlkBlk x y -> fold (strToArr $ y ^. blockStr) x
   where fold [] _ = return ()
         fold (x : xs) blk = do
           spush x
