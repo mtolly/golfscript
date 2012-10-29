@@ -385,7 +385,6 @@ slash = order $ \o -> case o of
   -- blk/blk: unfold
   BlkBlk cond body -> go >>= \xs -> semicolon >> spush (Arr xs) where
     go = unary dot >> predicate cond >>= \b ->
-      -- TODO: is the then-clause here correct?
       if b then liftM2 (:) top $ execute body >> go else return []
   -- int/blk: error
   IntBlk _ _ -> error "slash: undefined operation '<int><blk>/'"
