@@ -92,7 +92,7 @@ pop g = case g ^. stack of
 -- | Run a single command.
 run :: (Monad m) => Do m -> Golf m -> m (Golf m)
 run d g = case d of
-  Get v def -> case (M.lookup v $ g ^. variables) <|> def of
+  Get v def -> case M.lookup v (g ^. variables) <|> def of
     Nothing -> return g
     Just (Blk b) -> runs (b ^. blockDo) g -- execute block
     Just x       -> return $ push x g     -- push x onto stack
