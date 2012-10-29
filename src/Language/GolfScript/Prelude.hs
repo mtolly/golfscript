@@ -17,7 +17,7 @@ import Data.Accessor
 import System.Random
 
 -- | Two values popped off the stack, coerced to the same type. For @Foos x y@,
--- the original stack looked like @[y, x, ...]@.
+-- @y@ was on top of @x@ in the original stack.
 data Coerced m
   = Ints Integer Integer
   | Arrs [Val m] [Val m]
@@ -26,7 +26,7 @@ data Coerced m
   deriving (Eq, Ord, Show, Read)
 
 -- | Two values popped off the stack, placed in a standard type-priority order.
--- For @FooFoo x y@, the original stack looked like @[y, x, ...]@.
+-- For @FooFoo x y@, @y@ was on top of @x@ in the original stack.
 data Ordered m
   = IntInt Integer Integer
   | IntArr Integer [Val m]
