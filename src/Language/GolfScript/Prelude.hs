@@ -394,14 +394,15 @@ percent' o = case o of
   ArrStr x y -> return $ Arr $ map Arr $ cleanSplitOn (strToArr y) x
   StrStr x y -> return $ Arr $ map Str $ cleanSplitOn y x
   -- seq/blk: map elements
-  ArrBlk x y -> lb >> forM_ x (\v -> spush v >> execute y) >> rb >> spop'
-  StrBlk x y ->
-    lb >> forM_ (strToArr x) (\v -> spush v >> execute y) >> rb >> spop'
+  ArrBlk x y -> mapArr y x
+  StrBlk x y -> mapArr y $ strToArr x
   -- int/blk: error
   IntBlk _ _ -> error "percent: undefined operation '<int><blk>%'"
   BlkBlk _ _ -> error "percent: undefined operation '<blk><blk>%'"
   where every i xs = map head $ chunksOf i xs
         cleanSplitOn xs ys = filter (not . null) $ splitOn xs ys
+        mapArr blk arr =
+          lb >> mapM_ (\v -> spush v >> execute blk) arr >> rb >> spop'
 
 percent :: (Monad m) => S m ()
 percent = order $ percent' >=> spush
