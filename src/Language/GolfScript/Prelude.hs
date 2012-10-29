@@ -513,7 +513,16 @@ primZip :: (Monad m) => S m ()
 primZip = error "primZip: TODO implement zip"
 
 primBase :: (Monad m) => S m ()
-primBase = error "primBase: TODO implement base"
+primBase = binary $ \x y -> case (x, y) of
+  (Int n, Int r) -> spush $ Arr $ map Int $ reverse $ unfoldr getDigit $ abs n
+    where getDigit 0 = Nothing
+          getDigit i = case divMod i r of (d, m) -> Just (m, d)
+  (Arr dgts, Int r) -> spush $ Int $ sum $ zipWith (*) places dgts'
+    where dgts' = reverse $ map getInt dgts
+          getInt (Int i) = i
+          getInt _       = error "primBase: non-Int digit"
+          places = iterate (* r) 1
+  _ -> error "primBase: invalid args, expected <int><int>base or <arr><int>base"
 
 primWhile :: (Monad m) => S m ()
 primWhile = binary f where
