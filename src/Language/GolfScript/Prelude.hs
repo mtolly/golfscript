@@ -452,40 +452,47 @@ greater = order $ \o -> case o of
 
 equal :: (Monad m) => S m ()
 equal = order $ \o -> case o of
-  -- For same types, test for equal.
+  -- Test for equality.
   IntInt x y -> spush $ unbool $ x == y
   ArrArr x y -> spush $ unbool $ x == y
   StrStr x y -> spush $ unbool $ x == y
   BlkBlk x y -> spush $ unbool $ x^.blockStr == y^.blockStr
   ArrStr x y -> spush $ unbool $ x == strToArr y
   StrBlk x y -> spush $ unbool $ x == y^.blockStr
-  -- For int and sequence, get at index.
+  -- Get element at index, or nothing.
   IntArr x y -> maybe (return ()) spush $ index x y
   IntStr x y -> maybe (return ()) (spush . Int . c2i) $ index x y
-  IntBlk x y -> maybe (return ()) (spush . Int . c2i) $ index x $ y^.blockStr
-  -- ???
-  ArrBlk _ _ -> error "equal: undefined '=' with array and block"
+  IntBlk x y -> maybe (return ()) (spush . Int . c2i) $ index x $ y ^. blockStr
+  -- Always false.
+  ArrBlk _ _ -> spush $ Int 0
   where index n xs = lookup n $ if n < 0
           then zip [-1, -2 ..] $ reverse xs
           else zip [0 ..] xs
 
 question :: (Monad m) => S m ()
 question = order $ \o -> case o of
-  -- For two ints, exponent.
+  -- Exponent.
   IntInt x y -> spush $ Int $ x ^ y
-  -- For int and seq, find element and push index.
-  IntArr x y -> spush $ Int $ fromMaybe (-1) $ lookup (Int x) $ zip y [0..]
-  IntStr x y -> spush $ Int $ fromMaybe (-1) $ lookup (i2c x) $ zip y [0..]
-  IntBlk x y ->
-    spush $ Int $ fromMaybe (-1) $ lookup (i2c x) $ zip (y^.blockStr) [0..]
-  -- For seq and blk, find element and push index.
-  ArrBlk _ _ -> error "question: TODO <arr><blk>?"
-  StrBlk _ _ -> error "question: TODO <str><blk>?"
-  BlkBlk _ _ -> error "question: TODO <blk><blk>?"
-  -- For two seqs, find subsequence and push index.
-  ArrArr _ _ -> error "question: TODO <arr><arr>?"
-  ArrStr _ _ -> error "question: TODO <arr><str>?"
-  StrStr _ _ -> error "question: TODO <str><str>?"
+  -- Find element, and push index or -1.
+  IntArr x y -> indexOf (Int x) y
+  IntStr x y -> indexOf (i2c x) y
+  ArrArr x y -> indexOf (Arr y) x
+  ArrStr x y -> indexOf (Str y) x
+  -- Find substring, and push index or -1.
+  StrStr x y -> spush $ Int $ fromIntegral $ fromMaybe (-1) $ y `infixOf` x
+  -- Find element, and push element or nothing.
+  ArrBlk x y -> findBy y x
+  StrBlk x y -> findBy y $ strToArr x
+  BlkBlk x y -> findBy x $ strToArr $ y ^. blockStr
+  -- ???
+  IntBlk _ _ -> error "question: undefined operation <int><blk>?"
+  where findBy _   []     = return ()
+        findBy blk (x:xs) = spush x >> predicate blk >>= \b ->
+          if b then spush x else findBy blk xs
+        indexOf x xs = spush $ Int $ fromMaybe (-1) $ lookup x $ zip xs [0..]
+
+infixOf :: (Eq a) => [a] -> [a] -> Maybe Int
+xs `infixOf` ys = findIndex (xs `isPrefixOf`) $ tails ys
 
 primDo :: (Monad m) => S m ()
 primDo = unary $ \x -> case x of
