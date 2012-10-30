@@ -4,17 +4,26 @@ GolfScript interpreter in Haskell
 By Michael Tolly
 ----------------
 
-Under development. Planned features:
+More or less completed features:
 
-* Should support all the official implementation's features, except for Ruby
-  string interpolation.
+* All the original implementation's built-in functions and features, except for
+  Ruby string interpolation. The original Ruby code has lots of behavior which
+  was probably not intended by the developer; I've tried to replicate this
+  behavior where practical (that is, where it did not enormously complicate the
+  implementation). There are still a few kinks to work out; more testing needed.
 
-* Pure mode and IO mode, where only IO mode would have things like explicit
-  print commands. Implemented as a monad parameter in the interpreter state,
-  filled by either Identity or IO.
+* The entire interpreter, including top-level state, data values, and built-in
+  functions, are parameterized by a monad. You can fill this with Identity or IO
+  (or any other useful monad) to choose between a pure and impure interpreter;
+  only the impure interpreter has explicit print commands.
 
-* Warnings mode, where warnings can be printed for undefined function
-  applications, writing to whitespace variable names, and reading from undefined
-  variables (other than whitespace).
+* Just as non-strict as Haskell. This allows more legal programs than the Ruby
+  implementation; for example, you can work with infinite stacks.
 
-* Just as non-strict as Haskell, so you can do things like infinite stacks.
+Planned features:
+
+* Customizable error/warning handling, for situations such as: popping from an
+  empty stack, invalid type arguments given to a function, writing to whitespace
+  variable names, and reading from undefined variables (other than whitespace).
+  This would be massively helpful when debugging a program (also, helpful for me
+  in debugging the interpreter's behavior!).
