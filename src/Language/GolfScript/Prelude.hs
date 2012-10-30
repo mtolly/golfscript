@@ -88,6 +88,27 @@ binary f = do { y <- spop'; x <- spop'; f x y }
 ternary :: (Monad m) => (Val m -> Val m -> Val m -> S m a) -> S m a
 ternary f = do { z <- spop'; y <- spop'; x <- spop'; f x y z }
 
+anyToArr :: Val m -> [Val m]
+anyToArr x = case x of
+  Int _ -> [x] -- .rb behavior is a complete bug, so this is just filler
+  Arr a -> a
+  Str s -> strToArr s
+  Blk b -> strToArr $ b ^. blockStr
+
+anyToStr :: Val m -> String
+anyToStr x = case x of
+  Int i -> show i -- again, this is meaningless
+  Arr a -> arrToStr a
+  Str s -> s
+  Blk b -> b ^. blockStr
+
+anyToBlk :: Val m -> Block m
+anyToBlk x = case x of
+  Int i -> strBlock $ show i -- uselesssssss
+  Arr a -> strBlock $ arrToStr a
+  Str s -> strBlock s
+  Blk b -> b
+
 -- | Converts a string to a array of integers.
 strToArr :: String -> [Val m]
 strToArr = map $ Int . c2i
@@ -247,6 +268,10 @@ rp = unary $ \x -> case x of
 -- | @`@ uneval: convert a value to the code which generates that value
 backtick :: (Monad m) => S m ()
 backtick = unary $ \x -> spush $ Str $ uneval [Push x]
+  -- Note: "Push (Int i)" is not ok because "i" might be a variable. But we're
+  -- just unevaling it immediately, so it just gets converted to a string
+  -- anyway. If it is then evaled, it will be expanded into the correct
+  -- "Get (show i) (Just (Int i))".
 
 -- | @$@ copy nth item from stack (int), sort (arr\/str), take str\/arr and
 -- sort by mapping (blk)
@@ -498,8 +523,19 @@ primAbs = unary $ \x -> case x of
   Int i -> spush $ Int $ abs i
   _     -> error $ "primAbs: 'abs' expected int arg, received: " ++ show x
 
+primZip' :: [Val m] -> [Val m]
+primZip' [] = []
+primZip' (x:xs) = case x of
+  Int _ -> error "primZip: int found in an array passed to 'zip'"
+  Arr a -> map Arr $ transpose $ a : map anyToArr xs
+  Str s -> map Str $ transpose $ s : map anyToStr xs
+  Blk b -> map (Blk . strBlock) $ transpose $ map (^. blockStr) $ b : map anyToBlk xs
+
+-- | Only well-defined for an array of arrs/strs/blks.
 primZip :: (Monad m) => S m ()
-primZip = error "primZip: TODO implement zip"
+primZip = unary $ \x -> case x of
+  Arr a -> spush $ Arr $ primZip' a
+  _     -> error $ "primZip: 'zip' expected array, received: " ++ show x
 
 primBase :: (Monad m) => S m ()
 primBase = binary $ \x y -> case (x, y) of
