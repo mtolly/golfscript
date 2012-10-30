@@ -529,9 +529,10 @@ primZip' (x:xs) = case x of
   Int _ -> error "primZip: int found in an array passed to 'zip'"
   Arr a -> map Arr $ transpose $ a : map anyToArr xs
   Str s -> map Str $ transpose $ s : map anyToStr xs
-  Blk b -> map (Blk . strBlock) $ transpose $ map (^. blockStr) $ b : map anyToBlk xs
+  Blk b ->
+    map (Blk . strBlock) $ transpose $ map (^. blockStr) $ b : map anyToBlk xs
 
--- | Only well-defined for an array of arrs/strs/blks.
+-- | Only well-defined for an array of arrs/strs/blks (can be heterogeneous).
 primZip :: (Monad m) => S m ()
 primZip = unary $ \x -> case x of
   Arr a -> spush $ Arr $ primZip' a
