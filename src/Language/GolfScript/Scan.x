@@ -1,7 +1,10 @@
 {
 {-# OPTIONS_GHC -w #-}
 {- | Generated scanner for GolfScript programs -}
-module Language.GolfScript.Scan (scan, Token(..)) where
+module Language.GolfScript.Scan
+( scan
+, Token(..)
+) where
 }
 
 %wrapper "basic"

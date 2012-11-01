@@ -1,5 +1,18 @@
 {- | Core types and runtime. -}
-module Language.GolfScript.Base where
+module Language.GolfScript.Base
+( Val(..)
+, Do(..)
+, Block(..), blockDo, blockStr
+, Prim(..)
+, Golf(..), stack, brackets, variables
+, doBlock
+, empty
+, push, pop
+, run, runs
+, unscan, unparse, uneval
+, output
+, stackToArr
+) where
 
 import qualified Data.HashMap as M
 import Control.Monad
@@ -18,11 +31,14 @@ data Val m
 
 -- | A program command, parametrized by a monad for primitive functions.
 data Do m
-  = Push (Val m)  -- ^ Push a value onto the stack.
+  = Push (Val m)
+  -- ^ Push a value onto the stack.
   | Get  String (Maybe (Val m))
   -- ^ Read a variable, with a possible default value.
-  | Set  String   -- ^ Write to a variable.
-  | Prim (Prim m) -- ^ A primitive built-in function.
+  | Set  String
+  -- ^ Write to a variable.
+  | Prim (Prim m)
+  -- ^ A primitive built-in function.
   deriving (Eq, Ord, Show, Read)
 
 -- | A block of code with both an executable and string representation.

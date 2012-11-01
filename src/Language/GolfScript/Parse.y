@@ -1,6 +1,10 @@
 {
 {- | Generated parser for GolfScript programs -}
-module Language.GolfScript.Parse (scan, parse, eval, Token(..), strBlock) where
+module Language.GolfScript.Parse
+( scan, parse, eval
+, Token(..)
+, strBlock
+) where
 
 import Language.GolfScript.Base
 import Language.GolfScript.Scan
