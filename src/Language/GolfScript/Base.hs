@@ -65,10 +65,12 @@ instance Read (Prim m) where readsPrec   = error "readsPrec: can't read Prim"
 
 -- | The state of a GolfScript program.
 data Golf m = Golf
-  { stack_     :: [Val m]
-  , brackets_  :: [Int]
-  , variables_ :: M.Map String (Val m)
-  } deriving (Eq, Ord, Show, Read)
+  { stack_      :: [Val m]
+  , brackets_   :: [Int]
+  , variables_  :: M.Map String (Val m)
+  , emptyStack_ :: String -> m ()
+  , typeError_  :: String -> [Val m] -> m ()
+  }
 
 -- | The program stack. Starts out containing a single string of standard input.
 stack :: Accessor (Golf m) [Val m]
@@ -91,8 +93,17 @@ doBlock :: [Do m] -> Block m
 doBlock dos = Block { blockDo_ = dos, blockStr_ = uneval dos }
 
 -- | An initial state with an empty stack and no predefined variables.
+-- Popping from an empty stack, and arguments of invalid type, throw errors.
 empty :: Golf m
-empty = Golf [] [] M.empty
+empty = Golf
+  { stack_      = []
+  , brackets_   = []
+  , variables_  = M.empty
+  , emptyStack_ = \fun -> error $
+    "Function '" ++ fun ++ "' popped from empty stack"
+  , typeError_  = \fun vals -> error $
+    "Function '" ++ fun ++ "' couldn't use input " ++ show vals
+  }
 
 -- | Push a value onto the stack.
 push :: Val m -> Golf m -> Golf m
