@@ -4,7 +4,7 @@ module Language.GolfScript.Base
 , Do(..)
 , Block(..), blockDo, blockStr
 , Prim(..)
-, Golf(..), stack, brackets, variables
+, Golf(..), stack, brackets, variables, emptyStack, typeError
 , doBlock
 , empty
 , push, pop
@@ -87,6 +87,14 @@ brackets = accessor brackets_ $ \x g -> g { brackets_ = x }
 -- | Named variables, stored in a hash table.
 variables :: Accessor (Golf m) (M.Map String (Val m))
 variables = accessor variables_ $ \x g -> g { variables_ = x }
+
+-- | Error-handling function for trying to pop or peek an empty stack.
+emptyStack :: Accessor (Golf m) (String -> m ())
+emptyStack = accessor emptyStack_ $ \x g -> g { emptyStack_ = x }
+
+-- | Error-handling function for passing invalid-type arguments to a function.
+typeError :: Accessor (Golf m) (String -> [Val m] -> m ())
+typeError = accessor typeError_ $ \x g -> g { typeError_ = x }
 
 -- | Creates a block by generating the string representation, given a program.
 doBlock :: [Do m] -> Block m
