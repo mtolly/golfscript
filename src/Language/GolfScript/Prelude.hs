@@ -229,7 +229,7 @@ comma x = case x of
   Arr a -> push $ Int $ fromIntegral $ length a
   Str s -> push $ Int $ fromIntegral $ length s
   Blk b -> pop >>= \y -> case y of -- take array a, then: filterBy b a
-    Int _ -> error "comma: undefined operation '<int><blk>,'"
+    Int _ -> crash "comma: undefined operation '<int><blk>,'"
     Arr a -> blkFilter a >>= push . Arr
     Str s -> blkFilter (strToArr s) >>= push . Str . arrToStr
     Blk b' -> blkFilter (strToArr $ blockStr_ b') >>=
@@ -388,7 +388,7 @@ slash = order $ \o -> case o of
     go = unary dot >> predicate cond >>= \b ->
       if b then liftM2 (:) top $ execute body >> go else return []
   -- int/blk: error
-  IntBlk _ _ -> error "slash: undefined operation '<int><blk>/'"
+  IntBlk _ _ -> crash "slash: undefined operation '<int><blk>/'"
 
 percent' :: (Monad m) => Ordered m -> Golf m (Val m)
 percent' o = case o of
@@ -409,8 +409,8 @@ percent' o = case o of
   ArrBlk x y -> mapArr y x
   StrBlk x y -> mapArr y $ strToArr x
   -- int/blk: error
-  IntBlk _ _ -> error "percent: undefined operation '<int><blk>%'"
-  BlkBlk _ _ -> error "percent: undefined operation '<blk><blk>%'"
+  IntBlk _ _ -> crash "percent: undefined operation '<int><blk>%'"
+  BlkBlk _ _ -> crash "percent: undefined operation '<blk><blk>%'"
   where every i xs = map head $ chunksOf i xs
         cleanSplitOn xs ys = filter (not . null) $ splitOn xs ys
         mapArr blk arr =
@@ -430,7 +430,7 @@ less = order $ \o -> case o of
   IntArr x y -> push $ Arr $ index x y
   IntStr x y -> push $ Str $ index x y
   IntBlk x y -> push $ Blk $ strBlock $ index x $ blockStr_ y
-  _ -> error "less: undefined '<' with two sequences of different types"
+  _ -> crash "less: undefined '<' with two sequences of different types"
   where index n xs = if n < 0
           then genericTake (n + genericLength xs) xs
           else genericTake n xs
@@ -446,7 +446,7 @@ greater = order $ \o -> case o of
   IntArr x y -> push $ Arr $ index x y
   IntStr x y -> push $ Str $ index x y
   IntBlk x y -> push $ Blk $ strBlock $ index x $ blockStr_ y
-  _ -> error "greater: undefined '>' with two sequences of different types"
+  _ -> crash "greater: undefined '>' with two sequences of different types"
   where index n xs = if n < 0
           then genericDrop (n + genericLength xs) xs
           else genericDrop n xs
@@ -486,11 +486,11 @@ question = order $ \o -> case o of
   StrBlk x y -> findBy y $ strToArr x
   BlkBlk x y -> findBy x $ strToArr $ blockStr_ y
   -- ???
-  IntBlk _ _ -> error "question: undefined operation <int><blk>?"
+  IntBlk _ _ -> crash "question: undefined operation <int><blk>?"
   where findBy _   []     = return ()
         findBy blk (x:xs) = push x >> predicate blk >>= \b ->
           if b then push x else findBy blk xs
-        indexOf x xs = push $ Int $ fromMaybe (-1) $ elemIndex x xs
+        indexOf x xs = push $ Int $ fromMaybe (-1) $ lookup x $ zip xs [0..]
 
 infixOf :: (Eq a) => [a] -> [a] -> Maybe Int
 xs `infixOf` ys = findIndex (xs `isPrefixOf`) $ tails ys
@@ -498,7 +498,7 @@ xs `infixOf` ys = findIndex (xs `isPrefixOf`) $ tails ys
 primDo :: (Monad m) => Golf m ()
 primDo = unary $ \x -> case x of
   Blk b -> go where go = predicate b >>= \p -> when p go
-  _ -> error "primDo: 'do' expects block on top of stack"
+  _ -> crash "primDo: 'do' expects block on top of stack"
 
 primIf :: (Monad m) => Golf m ()
 primIf = ternary $ \x y z -> case if bool x then y else z of
@@ -508,46 +508,46 @@ primIf = ternary $ \x y z -> case if bool x then y else z of
 primAbs :: (Monad m) => Golf m ()
 primAbs = unary $ \x -> case x of
   Int i -> push $ Int $ abs i
-  _     -> error $ "primAbs: 'abs' expected int arg, received: " ++ show x
+  _     -> crash $ "primAbs: 'abs' expected int arg, received: " ++ show x
 
-primZip' :: [Val m] -> [Val m]
-primZip' [] = []
+primZip' :: (Monad m) => [Val m] -> Golf m [Val m]
+primZip' [] = return []
 primZip' (x:xs) = case x of
-  Int _ -> error "primZip: int found in an array passed to 'zip'"
-  Arr a -> map Arr $ transpose $ a : map anyToArr xs
-  Str s -> map Str $ transpose $ s : map anyToStr xs
-  Blk b ->
+  Int _ -> crash "primZip: int found in an array passed to 'zip'"
+  Arr a -> return $ map Arr $ transpose $ a : map anyToArr xs
+  Str s -> return $ map Str $ transpose $ s : map anyToStr xs
+  Blk b -> return $
     map (Blk . strBlock) $ transpose $ map blockStr_ $ b : map anyToBlk xs
 
 -- | Only well-defined for an array of arrs/strs/blks (can be heterogeneous).
 primZip :: (Monad m) => Golf m ()
 primZip = unary $ \x -> case x of
-  Arr a -> push $ Arr $ primZip' a
-  _     -> error $ "primZip: 'zip' expected array, received: " ++ show x
+  Arr a -> primZip' a >>= push . Arr
+  _     -> crash $ "primZip: 'zip' expected array, received: " ++ show x
 
 primBase :: (Monad m) => Golf m ()
 primBase = binary $ \x y -> case (x, y) of
   (Int n, Int r) -> push $ Arr $ map Int $ reverse $ unfoldr getDigit $ abs n
     where getDigit 0 = Nothing
           getDigit i = case divMod i r of (d, m) -> Just (m, d)
-  (Arr dgts, Int r) -> push $ Int $ sum $ zipWith (*) places dgts'
-    where dgts' = reverse $ map getInt dgts
-          getInt (Int i) = i
-          getInt _       = error "primBase: non-Int digit"
+  (Arr dgts, Int r) -> dgts' >>= push . Int . sum . zipWith (*) places
+    where dgts' = liftM reverse $ mapM getInt dgts
+          getInt (Int i) = return i
+          getInt _       = crash "primBase: non-Int digit"
           places = iterate (* r) 1
-  _ -> error "primBase: invalid args, expected <int><int>base or <arr><int>base"
+  _ -> crash "primBase: invalid args, expected <int><int>base or <arr><int>base"
 
 primWhile :: (Monad m) => Golf m ()
 primWhile = binary f where
   f (Blk cond) (Blk body) = go where
     go = predicate cond >>= \b -> when b $ execute body >> go
-  f _ _ = error "primWhile: 'while' expected 2 block arguments"
+  f _ _ = crash "primWhile: 'while' expected 2 block arguments"
 
 primUntil :: (Monad m) => Golf m ()
 primUntil = binary f where
   f (Blk cond) (Blk body) = go where
     go = predicate cond >>= \b -> unless b $ execute body >> go
-  f _ _ = error "primUntil: 'until' expected 2 block arguments"
+  f _ _ = crash "primUntil: 'until' expected 2 block arguments"
 
 primPrint :: Golf IO ()
 primPrint = unary $ liftIO . putStr . output
@@ -555,7 +555,7 @@ primPrint = unary $ liftIO . putStr . output
 primRand :: Golf IO ()
 primRand = unary $ \x -> case x of
   Int i -> liftIO (getStdRandom $ randomR (0, i - 1)) >>= push . Int
-  _ -> error $ "primRand: 'rand' expected int argument, received: " ++ show x
+  _ -> crash $ "primRand: 'rand' expected int argument, received: " ++ show x
 
 --
 -- And finally, the initial state with built-in functions
