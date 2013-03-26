@@ -395,12 +395,12 @@ percent' o = case o of
   -- int/int: modulo
   IntInt x y -> return $ Int $ mod x y
   -- int/seq: select elems from y whose index mod x is 0
-  IntArr x y -> if x < 0
-    then return $ Arr $ every (fromIntegral $ abs x) $ reverse y
-    else return $ Arr $ every (fromIntegral x) y
-  IntStr x y -> if x < 0
-    then return $ Str $ every (fromIntegral $ abs x) $ reverse y
-    else return $ Str $ every (fromIntegral x) y
+  IntArr x y -> return $ Arr $ if x < 0
+    then every (fromIntegral $ abs x) $ reverse y
+    else every (fromIntegral x) y
+  IntStr x y -> return $ Str $ if x < 0
+    then every (fromIntegral $ abs x) $ reverse y
+    else every (fromIntegral x) y
   -- seq/seq: split x on occurrences of y, but get rid of empty segments
   ArrArr x y -> return $ Arr $ map Arr $ cleanSplitOn y x
   ArrStr x y -> return $ Arr $ map Arr $ cleanSplitOn (strToArr y) x
@@ -490,7 +490,7 @@ question = order $ \o -> case o of
   where findBy _   []     = return ()
         findBy blk (x:xs) = push x >> predicate blk >>= \b ->
           if b then push x else findBy blk xs
-        indexOf x xs = push $ Int $ fromMaybe (-1) $ lookup x $ zip xs [0..]
+        indexOf x xs = push $ Int $ fromMaybe (-1) $ elemIndex x xs
 
 infixOf :: (Eq a) => [a] -> [a] -> Maybe Int
 xs `infixOf` ys = findIndex (xs `isPrefixOf`) $ tails ys

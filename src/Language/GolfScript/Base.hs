@@ -93,7 +93,7 @@ setBrackets bs = modify $ \gs -> gs { brackets_ = bs }
 variables :: (Monad m) => Golf m (M.Map String (Val m))
 variables = gets variables_
 
-setVariables :: (Monad m) => (M.Map String (Val m)) -> Golf m ()
+setVariables :: (Monad m) => M.Map String (Val m) -> Golf m ()
 setVariables vs = modify $ \gs -> gs { variables_ = vs }
 
 -- | Creates a block by generating the string representation, given a program.
@@ -175,7 +175,7 @@ output :: Val m -> String
 output (Int i) = show i
 output (Arr a) = concatMap output a
 output (Str s) = s
-output (Blk b) = "{" ++ (blockStr_ b) ++ "}"
+output (Blk b) = "{" ++ blockStr_ b ++ "}"
 
 stackToArr :: (Monad m) => Golf m (Val m)
 stackToArr = liftM (Arr . reverse) stack
