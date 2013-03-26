@@ -6,14 +6,12 @@ import Language.GolfScript.Base
 import Language.GolfScript.Parse
 import qualified Data.HashMap as M
 import Data.Bits
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.IO.Class
 import Control.Monad
 import Data.Maybe
 import Data.List
 import Data.Ord
 import Data.List.Split
-import Data.Accessor
 import System.Random
 
 -- | Two values popped off the stack, coerced to the same type. For @Foos x y@,
@@ -40,31 +38,20 @@ data Ordered m
   | BlkBlk (Block m) (Block m)
   deriving (Eq, Ord, Show, Read)
 
-type S m = StateT (Golf m) m
-
 -- | Packages a state function as a value that can be assigned to a variable.
-prim :: (Monad m) => S m () -> Val m
-prim s = Blk $ doBlock [Prim $ P $ execStateT s]
+prim :: (Monad m) => Golf m () -> Val m
+prim s = Blk $ doBlock [Prim $ P s]
 
 --
 -- Helper functions
 --
 
-spush :: (Monad m) => Val m -> S m ()
-spush x = modify (push x)
-
-spop :: (Monad m) => S m (Maybe (Val m))
-spop = gets pop >>= maybe (return Nothing) (\(x, g) -> put g >> return (Just x))
-
-spop' :: (Monad m) => S m (Val m)
-spop' = liftM (fromMaybe (error "spop': empty stack")) spop
-
 -- | Returns the top value of the stack, without doing a pop operation.
 -- Bracket boundaries aren't changed.
-top :: (Monad m) => S m (Val m)
-top = gets (^. stack) >>= \stk -> case stk of
+top :: (Monad m) => Golf m (Val m)
+top = stack >>= \s -> case s of
   x : _ -> return x
-  _     -> error "top: empty stack"
+  _     -> crash "top: empty stack"
 
 -- | False values are the number 0, and the empty array\/string\/block.
 bool :: Val m -> Bool
@@ -73,34 +60,34 @@ bool x = notElem x [Int 0, Arr [], Str "", Blk $ doBlock []]
 unbool :: Bool -> Val m
 unbool b = Int $ if b then 1 else 0
 
-execute :: (Monad m) => Block m -> StateT (Golf m) m ()
-execute blk = StateT $ runs (blk ^. blockDo) >=> \s -> return ((), s)
+execute :: (Monad m) => Block m -> Golf m ()
+execute = runs . blockDo_
 
 -- | Pop a value off the stack and use it.
-unary :: (Monad m) => (Val m -> S m a) -> S m a
-unary f = spop' >>= f
+unary :: (Monad m) => (Val m -> Golf m a) -> Golf m a
+unary f = pop >>= f
 
 -- | Pop two values off the stack and use them.
-binary :: (Monad m) => (Val m -> Val m -> S m a) -> S m a
-binary f = do { y <- spop'; x <- spop'; f x y }
+binary :: (Monad m) => (Val m -> Val m -> Golf m a) -> Golf m a
+binary f = do { y <- pop; x <- pop; f x y }
 
 -- | Pop three values off the stack and use them.
-ternary :: (Monad m) => (Val m -> Val m -> Val m -> S m a) -> S m a
-ternary f = do { z <- spop'; y <- spop'; x <- spop'; f x y z }
+ternary :: (Monad m) => (Val m -> Val m -> Val m -> Golf m a) -> Golf m a
+ternary f = do { z <- pop; y <- pop; x <- pop; f x y z }
 
 anyToArr :: Val m -> [Val m]
 anyToArr x = case x of
   Int _ -> [x] -- .rb behavior is a complete bug, so this is just filler
   Arr a -> a
   Str s -> strToArr s
-  Blk b -> strToArr $ b ^. blockStr
+  Blk b -> strToArr $ blockStr_ b
 
 anyToStr :: Val m -> String
 anyToStr x = case x of
   Int i -> show i -- again, this is meaningless
   Arr a -> arrToStr a
   Str s -> s
-  Blk b -> b ^. blockStr
+  Blk b -> blockStr_ b
 
 anyToBlk :: Val m -> Block m
 anyToBlk x = case x of
@@ -119,11 +106,11 @@ arrToStr = concatMap $ \x -> case x of
   Int i -> [i2c i]
   Str s -> s
   Arr a -> arrToStr a
-  Blk b -> b ^. blockStr
+  Blk b -> blockStr_ b
 
 -- | Runs a command sequence, then pops a value off and evaluates it for truth.
-predicate :: (Monad m) => Block m -> S m Bool
-predicate b = execute b >> liftM (maybe False bool) spop
+predicate :: (Monad m) => Block m -> Golf m Bool
+predicate b = execute b >> liftM (maybe False bool) popMaybe
 
 unsnoc :: [a] -> Maybe ([a], a)
 unsnoc xs = case reverse xs of
@@ -161,7 +148,7 @@ coerce' x y = case (x, y) of
           r:rs -> foldl (\v i -> (v +! Str b) +! i) (r `coerceTo` Str b) rs
         a +! b = plus' $ coerce' a b
 
-coerce :: (Monad m) => S m (Coerced m)
+coerce :: (Monad m) => Golf m (Coerced m)
 coerce = binary $ \x y -> return $ coerce' x y
 
 coerceTo :: Val m -> Val m -> Val m
@@ -171,7 +158,7 @@ x `coerceTo` y = case coerce' x y of
   Strs x' _ -> Str x'
   Blks x' _ -> Blk x'
 
-order :: (Monad m) => (Ordered m -> S m ()) -> S m ()
+order :: (Monad m) => (Ordered m -> Golf m ()) -> Golf m ()
 order f = binary $ \x y -> f $ case (x, y) of
   (Int a, Int b) -> IntInt a b
   (Int a, Arr b) -> IntArr a b
@@ -195,79 +182,79 @@ order f = binary $ \x y -> f $ case (x, y) of
 --
 
 -- | @[@ starts an array \"literal\"
-lb :: (Monad m) => S m ()
-lb = modify $ brackets ^: (0 :)
+lb :: (Monad m) => Golf m ()
+lb = brackets >>= setBrackets . (0 :)
 
 -- | @]@ ends an array \"literal\"
-rb :: (Monad m) => S m ()
-rb = gets (^. brackets) >>= \bts -> case bts of
-  [] -> modify $ stack ^: \s -> [Arr $ reverse s]
+rb :: (Monad m) => Golf m ()
+rb = brackets >>= \bts -> case bts of
+  [] -> stackToArr >>= setStack . (:[])
   b : bs -> do
-    modify $ brackets ^= bs   -- pop a bracket value off
-    arr <- replicateM b spop' -- pop n elements off the stack
-    spush $ Arr $ reverse arr -- reverse them and push on the new array
+    setBrackets bs           -- pop a bracket value off
+    arr <- replicateM b pop  -- pop n elements off the stack
+    push $ Arr $ reverse arr -- reverse them and push on the new array
 
 -- | @.@ duplicates the top value, by 1 pop and 2 pushes
-dot :: (Monad m) => Val m -> S m ()
-dot x = spush x >> spush x
+dot :: (Monad m) => Val m -> Golf m ()
+dot x = push x >> push x
 
 -- | @~@ bitwise not (int), eval (blk\/str), push each (arr)
-tilde :: (Monad m) => Val m -> S m ()
+tilde :: (Monad m) => Val m -> Golf m ()
 tilde x = case x of
-  Int i -> spush $ Int $ complement i
-  Arr a -> mapM_ spush a
+  Int i -> push $ Int $ complement i
+  Arr a -> mapM_ push a
   Blk b -> execute b
   Str s -> execute $ strBlock s
 
 -- | @!@ boolean not: if in {@0@, @[]@, @\"\"@, @{}@}, push 1. else push 0.
-bang :: (Monad m) => Val m -> S m ()
-bang x = spush $ Int $ if bool x then 0 else 1
+bang :: (Monad m) => Val m -> Golf m ()
+bang x = push $ Int $ if bool x then 0 else 1
 
 -- | @\@@ bring third value to top: @[z, y, x, ...]@ becomes @[x, z, y, ...]@
-at :: (Monad m) => Val m -> Val m -> Val m -> S m ()
-at x y z = spush y >> spush z >> spush x
+at :: (Monad m) => Val m -> Val m -> Val m -> Golf m ()
+at x y z = push y >> push z >> push x
 
 -- | @\\@ swap top two elements: @[y, x, ...]@ becomes @[x, y, ...]@
-backslash :: (Monad m) => Val m -> Val m -> S m ()
-backslash x y = spush y >> spush x
+backslash :: (Monad m) => Val m -> Val m -> Golf m ()
+backslash x y = push y >> push x
 
 -- | @;@ pop and discard top element
-semicolon :: (Monad m) => S m ()
-semicolon = spop >> return ()
+semicolon :: (Monad m) => Golf m ()
+semicolon = popMaybe >> return ()
 
 -- | @,@ make @[0..n]@ (int), length (arr\/str), filter arr\/str by key (blk)
-comma :: (Monad m) => Val m -> S m ()
+comma :: (Monad m) => Val m -> Golf m ()
 comma x = case x of
-  Int i -> spush $ Arr $ map Int [0 .. i-1]
-  Arr a -> spush $ Int $ fromIntegral $ length a
-  Str s -> spush $ Int $ fromIntegral $ length s
-  Blk b -> spop' >>= \y -> case y of -- take array a, then: filterBy b a
+  Int i -> push $ Arr $ map Int [0 .. i-1]
+  Arr a -> push $ Int $ fromIntegral $ length a
+  Str s -> push $ Int $ fromIntegral $ length s
+  Blk b -> pop >>= \y -> case y of -- take array a, then: filterBy b a
     Int _ -> error "comma: undefined operation '<int><blk>,'"
-    Arr a -> blkFilter a >>= spush . Arr
-    Str s -> blkFilter (strToArr s) >>= spush . Str . arrToStr
-    Blk b' -> blkFilter (strToArr $ b' ^. blockStr) >>=
-      spush . Blk . strBlock . arrToStr
-    where blkFilter = filterM $ \v -> spush v >> predicate b
+    Arr a -> blkFilter a >>= push . Arr
+    Str s -> blkFilter (strToArr s) >>= push . Str . arrToStr
+    Blk b' -> blkFilter (strToArr $ blockStr_ b') >>=
+      push . Blk . strBlock . arrToStr
+    where blkFilter = filterM $ \v -> push v >> predicate b
 
 -- | @(@ decrement (int), uncons from left (arr\/str)
-lp :: (Monad m) => S m ()
+lp :: (Monad m) => Golf m ()
 lp = unary $ \x -> case x of
-  Int i -> spush $ Int $ i - 1
-  Arr (v : vs) -> spush (Arr vs) >> spush v
-  Str (c : cs) -> spush (Str cs) >> spush (Int $ c2i c)
-  _ -> spush x
+  Int i -> push $ Int $ i - 1
+  Arr (v : vs) -> push (Arr vs) >> push v
+  Str (c : cs) -> push (Str cs) >> push (Int $ c2i c)
+  _ -> push x
 
 -- | @)@ increment (int), uncons from right (arr\/str)
-rp :: (Monad m) => S m ()
+rp :: (Monad m) => Golf m ()
 rp = unary $ \x -> case x of
-  Int i -> spush $ Int $ i + 1
-  Arr (unsnoc -> Just (vs, v)) -> spush (Arr vs) >> spush v
-  Str (unsnoc -> Just (cs, c)) -> spush (Str cs) >> spush (Int $ c2i c)
-  _ -> spush x
+  Int i -> push $ Int $ i + 1
+  Arr (unsnoc -> Just (vs, v)) -> push (Arr vs) >> push v
+  Str (unsnoc -> Just (cs, c)) -> push (Str cs) >> push (Int $ c2i c)
+  _ -> push x
 
 -- | @`@ uneval: convert a value to the code which generates that value
-backtick :: (Monad m) => S m ()
-backtick = unary $ \x -> spush $ Str $ uneval [Push x]
+backtick :: (Monad m) => Golf m ()
+backtick = unary $ \x -> push $ Str $ uneval [Push x]
   -- Note: "Push (Int i)" is not ok because "i" might be a variable. But we're
   -- just unevaling it immediately, so it just gets converted to a string
   -- anyway. If it is then evaled, it will be expanded into the correct
@@ -275,18 +262,18 @@ backtick = unary $ \x -> spush $ Str $ uneval [Push x]
 
 -- | @$@ copy nth item from stack (int), sort (arr\/str), take str\/arr and
 -- sort by mapping (blk)
-dollar :: (Monad m) => S m ()
+dollar :: (Monad m) => Golf m ()
 dollar = unary $ \x -> case x of
-  Int i -> gets (^. stack) >>= \stk -> case lookup i (zip [0..] stk) of
+  Int i -> stack >>= \stk -> case lookup i (zip [0..] stk) of
     Nothing -> return ()
-    Just v  -> spush v
-  Arr a -> spush $ Arr $ sort a -- in .rb, sorting different types is an error
-  Str s -> spush $ Str $ sort s
+    Just v  -> push v
+  Arr a -> push $ Arr $ sort a -- in .rb, sorting different types is an error
+  Str s -> push $ Str $ sort s
   Blk b -> unary $ \y -> case y of
-    Arr a -> sortOnM f a >>= spush . Arr
-    Str s -> sortOnM (f . Int . c2i) s >>= spush . Str
+    Arr a -> sortOnM f a >>= push . Arr
+    Str s -> sortOnM (f . Int . c2i) s >>= push . Str
     _ -> undefined
-    where f z = spush z >> execute b >> spop'
+    where f z = push z >> execute b >> pop
 
 sortOnM :: (Ord b, Monad m) => (a -> m b) -> [a] -> m [a]
 sortOnM f xs = mapM f xs >>= \ys ->
@@ -298,112 +285,112 @@ plus' c = case c of
   Arrs x y -> Arr $ x ++ y
   Strs x y -> Str $ x ++ y
   Blks x y -> Blk $ Block
-    { blockStr_ = (x ^. blockStr) ++ " " ++ (y ^. blockStr)
-    , blockDo_ = (x ^. blockDo) ++ [Get " " Nothing] ++ (y ^. blockDo) }
+    { blockStr_ = blockStr_ x ++ " " ++ blockStr_ y
+    , blockDo_  = blockDo_ x ++ [Get " " Nothing] ++ blockDo_ y }
 
 -- | @+@ coerce: add (ints), concat (arrs\/strs\/blks)
-plus :: (Monad m) => S m ()
-plus = coerce >>= spush . plus'
+plus :: (Monad m) => Golf m ()
+plus = coerce >>= push . plus'
 
 pipe' :: Coerced m -> Val m
 pipe' c = case c of
   Ints x y -> Int $ x .|. y
   Arrs x y -> Arr $ op x y
   Strs x y -> Str $ op x y
-  Blks x y -> Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
+  Blks x y -> Blk $ strBlock $ op (blockStr_ x) (blockStr_ y)
   where op x y = nub $ union x y
 
 -- | @|@ coerce: bitwise or (ints), setwise or (arrs\/strs\/blks)
-pipe :: (Monad m) => S m ()
-pipe = coerce >>= spush . pipe'
+pipe :: (Monad m) => Golf m ()
+pipe = coerce >>= push . pipe'
 
 ampersand' :: Coerced m -> Val m
 ampersand' c = case c of
   Ints x y -> Int $ x .&. y
   Arrs x y -> Arr $ op x y
   Strs x y -> Str $ op x y
-  Blks x y -> Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
+  Blks x y -> Blk $ strBlock $ op (blockStr_ x) (blockStr_ y)
   where op x y = nub $ intersect x y
 
 -- | @|@ coerce: bitwise and (ints), setwise and (arrs\/strs\/blks)
-ampersand :: (Monad m) => S m ()
-ampersand = coerce >>= spush . ampersand'
+ampersand :: (Monad m) => Golf m ()
+ampersand = coerce >>= push . ampersand'
 
 caret' :: Coerced m -> Val m
 caret' c = case c of
   Ints x y -> Int $ xor x y
   Arrs x y -> Arr $ op x y
   Strs x y -> Str $ op x y
-  Blks x y -> Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
+  Blks x y -> Blk $ strBlock $ op (blockStr_ x) (blockStr_ y)
   where op x y = nub $ union x y \\ intersect x y
 
 -- | @^@ coerce: bitwise xor (ints), setwise xor (arrs\/strs\/blks)
-caret :: (Monad m) => S m ()
-caret = coerce >>= spush . caret'
+caret :: (Monad m) => Golf m ()
+caret = coerce >>= push . caret'
 
 minus' :: Coerced m -> Val m
 minus' c = case c of
   Ints x y -> Int $ x - y
   Arrs x y -> Arr $ op x y
   Strs x y -> Str $ op x y
-  Blks x y -> Blk $ strBlock $ op (x ^. blockStr) (y ^. blockStr)
+  Blks x y -> Blk $ strBlock $ op (blockStr_ x) (blockStr_ y)
   where op x y = filter (`notElem` y) x
 
 -- | @^@ coerce: subtract (ints), setwise difference (arrs\/strs\/blks)
-minus :: (Monad m) => S m ()
-minus = coerce >>= spush . minus'
+minus :: (Monad m) => Golf m ()
+minus = coerce >>= push . minus'
 
 -- | @*@ order: multiply (int*int), run n times (int*blk), multiply and join
 -- (int*seq), join with separator (seq*seq), fold (seq*blk)
-star :: (Monad m) => S m ()
+star :: (Monad m) => Golf m ()
 star = order $ \o -> case o of
   -- multiply
-  IntInt x y -> spush $ Int $ x * y
+  IntInt x y -> push $ Int $ x * y
   -- concat n copies of seq
-  IntArr x y -> spush $ Arr $ concat $ genericReplicate x y
-  IntStr x y -> spush $ Str $ concat $ genericReplicate x y
+  IntArr x y -> push $ Arr $ concat $ genericReplicate x y
+  IntStr x y -> push $ Str $ concat $ genericReplicate x y
   -- run a block n times
   IntBlk x y -> replicateM_ (fromIntegral x) $ execute y
   -- join two sequences
-  ArrArr x y -> spush $ case x of
+  ArrArr x y -> push $ case x of
     [] -> Arr []
     r:rs -> foldl (\v i -> (v +! Arr y) +! i) (r `coerceTo` Arr y) rs
-  ArrStr x y -> spush $ case x of
+  ArrStr x y -> push $ case x of
     [] -> Str ""
     r:rs -> foldl (\v i -> (v +! Str y) +! i) (r `coerceTo` Str y) rs
-  StrStr x y -> spush $ Str $ intercalate y $ map (:"") x
+  StrStr x y -> push $ Str $ intercalate y $ map (:"") x
   -- fold
   ArrBlk x y -> fold x y
   StrBlk x y -> fold (strToArr x) y
-  BlkBlk x y -> fold (strToArr $ y ^. blockStr) x
+  BlkBlk x y -> fold (strToArr $ blockStr_ y) x
   where fold [] _ = return ()
         fold (x : xs) blk = do
-          spush x
-          forM_ xs $ \y -> spush y >> execute blk
+          push x
+          forM_ xs $ \y -> push y >> execute blk
         x +! y = plus' $ coerce' x y
 
-slash :: (Monad m) => S m ()
+slash :: (Monad m) => Golf m ()
 slash = order $ \o -> case o of
   -- int/int: divide
-  IntInt x y -> spush $ Int $ div x y
+  IntInt x y -> push $ Int $ div x y
   -- int/seq: split seq into chunks of n elements
-  IntArr x y -> spush $ Arr $ map Arr $ chunksOf (fromIntegral x) y
-  IntStr x y -> spush $ Arr $ map Str $ chunksOf (fromIntegral x) y
+  IntArr x y -> push $ Arr $ map Arr $ chunksOf (fromIntegral x) y
+  IntStr x y -> push $ Arr $ map Str $ chunksOf (fromIntegral x) y
   -- seq/seq: split x on occurrences of y
-  ArrArr x y -> spush $ Arr $ map Arr $ splitOn y x
-  ArrStr x y -> spush $ Arr $ map Arr $ splitOn (strToArr y) x
-  StrStr x y -> spush $ Arr $ map Str $ splitOn y x
+  ArrArr x y -> push $ Arr $ map Arr $ splitOn y x
+  ArrStr x y -> push $ Arr $ map Arr $ splitOn (strToArr y) x
+  StrStr x y -> push $ Arr $ map Str $ splitOn y x
   -- seq/blk: run block for each elem in seq
-  ArrBlk x y -> forM_ x $ \v -> spush v >> execute y
-  StrBlk x y -> forM_ (strToArr x) $ \v -> spush v >> execute y
+  ArrBlk x y -> forM_ x $ \v -> push v >> execute y
+  StrBlk x y -> forM_ (strToArr x) $ \v -> push v >> execute y
   -- blk/blk: unfold
-  BlkBlk cond body -> go >>= \xs -> semicolon >> spush (Arr xs) where
+  BlkBlk cond body -> go >>= \xs -> semicolon >> push (Arr xs) where
     go = unary dot >> predicate cond >>= \b ->
       if b then liftM2 (:) top $ execute body >> go else return []
   -- int/blk: error
   IntBlk _ _ -> error "slash: undefined operation '<int><blk>/'"
 
-percent' :: (Monad m) => Ordered m -> S m (Val m)
+percent' :: (Monad m) => Ordered m -> Golf m (Val m)
 percent' o = case o of
   -- int/int: modulo
   IntInt x y -> return $ Int $ mod x y
@@ -427,100 +414,100 @@ percent' o = case o of
   where every i xs = map head $ chunksOf i xs
         cleanSplitOn xs ys = filter (not . null) $ splitOn xs ys
         mapArr blk arr =
-          lb >> mapM_ (\v -> spush v >> execute blk) arr >> rb >> spop'
+          lb >> mapM_ (\v -> push v >> execute blk) arr >> rb >> pop
 
-percent :: (Monad m) => S m ()
-percent = order $ percent' >=> spush
+percent :: (Monad m) => Golf m ()
+percent = order $ percent' >=> push
 
-less :: (Monad m) => S m ()
+less :: (Monad m) => Golf m ()
 less = order $ \o -> case o of
   -- less than comparison
-  IntInt x y -> spush $ unbool $ x < y
-  ArrArr x y -> spush $ unbool $ x < y
-  StrStr x y -> spush $ unbool $ x < y
-  BlkBlk x y -> spush $ unbool $ x^.blockStr < y^.blockStr
+  IntInt x y -> push $ unbool $ x < y
+  ArrArr x y -> push $ unbool $ x < y
+  StrStr x y -> push $ unbool $ x < y
+  BlkBlk x y -> push $ unbool $ blockStr_ x < blockStr_ y
   -- select elements in a sequence with index < n
-  IntArr x y -> spush $ Arr $ index x y
-  IntStr x y -> spush $ Str $ index x y
-  IntBlk x y -> spush $ Blk $ strBlock $ index x $ y^.blockStr
+  IntArr x y -> push $ Arr $ index x y
+  IntStr x y -> push $ Str $ index x y
+  IntBlk x y -> push $ Blk $ strBlock $ index x $ blockStr_ y
   _ -> error "less: undefined '<' with two sequences of different types"
   where index n xs = if n < 0
           then genericTake (n + genericLength xs) xs
           else genericTake n xs
 
-greater :: (Monad m) => S m ()
+greater :: (Monad m) => Golf m ()
 greater = order $ \o -> case o of
   -- greater than comparison
-  IntInt x y -> spush $ unbool $ x > y
-  ArrArr x y -> spush $ unbool $ x > y
-  StrStr x y -> spush $ unbool $ x > y
-  BlkBlk x y -> spush $ unbool $ x^.blockStr < y^.blockStr
+  IntInt x y -> push $ unbool $ x > y
+  ArrArr x y -> push $ unbool $ x > y
+  StrStr x y -> push $ unbool $ x > y
+  BlkBlk x y -> push $ unbool $ blockStr_ x < blockStr_ y
   -- select elements in a sequence with index >= n
-  IntArr x y -> spush $ Arr $ index x y
-  IntStr x y -> spush $ Str $ index x y
-  IntBlk x y -> spush $ Blk $ strBlock $ index x $ y^.blockStr
+  IntArr x y -> push $ Arr $ index x y
+  IntStr x y -> push $ Str $ index x y
+  IntBlk x y -> push $ Blk $ strBlock $ index x $ blockStr_ y
   _ -> error "greater: undefined '>' with two sequences of different types"
   where index n xs = if n < 0
           then genericDrop (n + genericLength xs) xs
           else genericDrop n xs
 
-equal :: (Monad m) => S m ()
+equal :: (Monad m) => Golf m ()
 equal = order $ \o -> case o of
   -- Test for equality.
-  IntInt x y -> spush $ unbool $ x == y
-  ArrArr x y -> spush $ unbool $ x == y
-  StrStr x y -> spush $ unbool $ x == y
-  BlkBlk x y -> spush $ unbool $ x^.blockStr == y^.blockStr
-  ArrStr x y -> spush $ unbool $ x == strToArr y
-  StrBlk x y -> spush $ unbool $ x == y^.blockStr
+  IntInt x y -> push $ unbool $ x == y
+  ArrArr x y -> push $ unbool $ x == y
+  StrStr x y -> push $ unbool $ x == y
+  BlkBlk x y -> push $ unbool $ blockStr_ x == blockStr_ y
+  ArrStr x y -> push $ unbool $ x == strToArr y
+  StrBlk x y -> push $ unbool $ x == blockStr_ y
   -- Get element at index, or nothing.
-  IntArr x y -> maybe (return ()) spush $ index x y
-  IntStr x y -> maybe (return ()) (spush . Int . c2i) $ index x y
-  IntBlk x y -> maybe (return ()) (spush . Int . c2i) $ index x $ y ^. blockStr
+  IntArr x y -> maybe (return ()) push $ index x y
+  IntStr x y -> maybe (return ()) (push . Int . c2i) $ index x y
+  IntBlk x y -> maybe (return ()) (push . Int . c2i) $ index x $ blockStr_ y
   -- Always false.
-  ArrBlk _ _ -> spush $ Int 0
+  ArrBlk _ _ -> push $ Int 0
   where index n xs = lookup n $ if n < 0
           then zip [-1, -2 ..] $ reverse xs
           else zip [0 ..] xs
 
-question :: (Monad m) => S m ()
+question :: (Monad m) => Golf m ()
 question = order $ \o -> case o of
   -- Exponent.
-  IntInt x y -> spush $ Int $ x ^ y
+  IntInt x y -> push $ Int $ x ^ y
   -- Find element, and push index or -1.
   IntArr x y -> indexOf (Int x) y
   IntStr x y -> indexOf (i2c x) y
   ArrArr x y -> indexOf (Arr y) x
   ArrStr x y -> indexOf (Str y) x
   -- Find substring, and push index or -1.
-  StrStr x y -> spush $ Int $ fromIntegral $ fromMaybe (-1) $ y `infixOf` x
+  StrStr x y -> push $ Int $ fromIntegral $ fromMaybe (-1) $ y `infixOf` x
   -- Find element, and push element or nothing.
   ArrBlk x y -> findBy y x
   StrBlk x y -> findBy y $ strToArr x
-  BlkBlk x y -> findBy x $ strToArr $ y ^. blockStr
+  BlkBlk x y -> findBy x $ strToArr $ blockStr_ y
   -- ???
   IntBlk _ _ -> error "question: undefined operation <int><blk>?"
   where findBy _   []     = return ()
-        findBy blk (x:xs) = spush x >> predicate blk >>= \b ->
-          if b then spush x else findBy blk xs
-        indexOf x xs = spush $ Int $ fromMaybe (-1) $ lookup x $ zip xs [0..]
+        findBy blk (x:xs) = push x >> predicate blk >>= \b ->
+          if b then push x else findBy blk xs
+        indexOf x xs = push $ Int $ fromMaybe (-1) $ lookup x $ zip xs [0..]
 
 infixOf :: (Eq a) => [a] -> [a] -> Maybe Int
 xs `infixOf` ys = findIndex (xs `isPrefixOf`) $ tails ys
 
-primDo :: (Monad m) => S m ()
+primDo :: (Monad m) => Golf m ()
 primDo = unary $ \x -> case x of
   Blk b -> go where go = predicate b >>= \p -> when p go
   _ -> error "primDo: 'do' expects block on top of stack"
 
-primIf :: (Monad m) => S m ()
+primIf :: (Monad m) => Golf m ()
 primIf = ternary $ \x y z -> case if bool x then y else z of
   Blk b -> execute b
-  v     -> spush v
+  v     -> push v
 
-primAbs :: (Monad m) => S m ()
+primAbs :: (Monad m) => Golf m ()
 primAbs = unary $ \x -> case x of
-  Int i -> spush $ Int $ abs i
+  Int i -> push $ Int $ abs i
   _     -> error $ "primAbs: 'abs' expected int arg, received: " ++ show x
 
 primZip' :: [Val m] -> [Val m]
@@ -530,44 +517,44 @@ primZip' (x:xs) = case x of
   Arr a -> map Arr $ transpose $ a : map anyToArr xs
   Str s -> map Str $ transpose $ s : map anyToStr xs
   Blk b ->
-    map (Blk . strBlock) $ transpose $ map (^. blockStr) $ b : map anyToBlk xs
+    map (Blk . strBlock) $ transpose $ map blockStr_ $ b : map anyToBlk xs
 
 -- | Only well-defined for an array of arrs/strs/blks (can be heterogeneous).
-primZip :: (Monad m) => S m ()
+primZip :: (Monad m) => Golf m ()
 primZip = unary $ \x -> case x of
-  Arr a -> spush $ Arr $ primZip' a
+  Arr a -> push $ Arr $ primZip' a
   _     -> error $ "primZip: 'zip' expected array, received: " ++ show x
 
-primBase :: (Monad m) => S m ()
+primBase :: (Monad m) => Golf m ()
 primBase = binary $ \x y -> case (x, y) of
-  (Int n, Int r) -> spush $ Arr $ map Int $ reverse $ unfoldr getDigit $ abs n
+  (Int n, Int r) -> push $ Arr $ map Int $ reverse $ unfoldr getDigit $ abs n
     where getDigit 0 = Nothing
           getDigit i = case divMod i r of (d, m) -> Just (m, d)
-  (Arr dgts, Int r) -> spush $ Int $ sum $ zipWith (*) places dgts'
+  (Arr dgts, Int r) -> push $ Int $ sum $ zipWith (*) places dgts'
     where dgts' = reverse $ map getInt dgts
           getInt (Int i) = i
           getInt _       = error "primBase: non-Int digit"
           places = iterate (* r) 1
   _ -> error "primBase: invalid args, expected <int><int>base or <arr><int>base"
 
-primWhile :: (Monad m) => S m ()
+primWhile :: (Monad m) => Golf m ()
 primWhile = binary f where
   f (Blk cond) (Blk body) = go where
     go = predicate cond >>= \b -> when b $ execute body >> go
   f _ _ = error "primWhile: 'while' expected 2 block arguments"
 
-primUntil :: (Monad m) => S m ()
+primUntil :: (Monad m) => Golf m ()
 primUntil = binary f where
   f (Blk cond) (Blk body) = go where
     go = predicate cond >>= \b -> unless b $ execute body >> go
   f _ _ = error "primUntil: 'until' expected 2 block arguments"
 
-primPrint :: S IO ()
-primPrint = unary $ lift . putStr . output
+primPrint :: Golf IO ()
+primPrint = unary $ liftIO . putStr . output
 
-primRand :: S IO ()
+primRand :: Golf IO ()
 primRand = unary $ \x -> case x of
-  Int i -> lift (getStdRandom $ randomR (0, i - 1)) >>= spush . Int
+  Int i -> liftIO (getStdRandom $ randomR (0, i - 1)) >>= push . Int
   _ -> error $ "primRand: 'rand' expected int argument, received: " ++ show x
 
 --
@@ -625,5 +612,5 @@ preludeIO = prelude ++
   ]
 
 -- | Returns an initial state with a certain prelude loaded.
-emptyWith :: (Monad m) => [(String, Val m)] -> Golf m
-emptyWith prel = variables ^= M.fromList prel $ empty
+emptyWith :: (Monad m) => [(String, Val m)] -> GolfState m
+emptyWith prel = empty { variables_ = M.fromList prel }

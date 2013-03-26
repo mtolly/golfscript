@@ -9,8 +9,7 @@ Category:           Data
 
 Library
   Build-Depends:    base, array, hashmap, transformers, random,
-                    split >= 0.2 && < 0.3,
-                    data-accessor
+                    split >= 0.2 && < 0.3
                     
   Exposed-modules:  Language.GolfScript.Base
                     Language.GolfScript.Scan
@@ -22,5 +21,5 @@ Library
 
 Executable golf
   main-is:          golf.hs
-  build-depends:    base, golfscript, transformers, data-accessor
+  build-depends:    base, golfscript, transformers
   ghc-options:      -Wall
