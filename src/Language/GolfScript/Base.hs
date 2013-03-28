@@ -14,6 +14,7 @@ module Language.GolfScript.Base
 , output
 , stackToArr
 , crash
+, runGolf
 ) where
 
 import qualified Data.HashMap as M
@@ -67,6 +68,10 @@ data GolfState m = GolfState
   }
 
 type Golf m = StateT (GolfState m) (ErrorT String m)
+
+-- | Runs a Golf program in the embedded monad.
+runGolf :: (Monad m) => Golf m a -> GolfState m -> m (Either String a)
+runGolf g s = runErrorT $ evalStateT g s
 
 crash :: (Monad m) => String -> Golf m a
 crash = lift . throwError
