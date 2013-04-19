@@ -6,6 +6,7 @@ Maintainer:         tolly@wisc.edu
 Build-Type:         Simple
 Cabal-version:      >= 1.8
 Category:           Data
+Data-Files:         test/golfscript.rb
 
 Library
   Build-Depends:    base, array, hashmap, transformers, random,
@@ -23,3 +24,9 @@ Executable golf
   main-is:          golf.hs
   build-depends:    base, golfscript
   ghc-options:      -Wall
+
+Test-Suite test-golfscript
+  type:             exitcode-stdio-1.0
+  main-is:          test.hs
+  other-modules:    Paths_golfscript
+  build-depends:    base, filepath, directory, process
