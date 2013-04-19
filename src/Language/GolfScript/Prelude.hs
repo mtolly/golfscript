@@ -13,6 +13,8 @@ import Data.List
 import Data.Ord
 import Data.List.Split
 import System.Random
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Writer
 
 -- | Two values popped off the stack, coerced to the same type. For @Foos x y@,
 -- @y@ was on top of @x@ in the original stack.
@@ -547,7 +549,7 @@ primUntil = pop2 >>= uncurry f where
 primPrint :: Golf IO ()
 primPrint = pop >>= liftIO . putStr . output
 
-primRand :: Golf IO ()
+primRand :: (MonadIO m) => Golf m ()
 primRand = pop >>= \x -> case x of
   Int i -> liftIO (getStdRandom $ randomR (0, i - 1)) >>= push . Int
   _ -> crash $ "primRand: 'rand' expected int argument, received: " ++ show x
@@ -609,3 +611,21 @@ preludeIO = prelude ++
 -- | Returns an initial state with a certain prelude loaded.
 emptyWith :: (Monad m) => [(String, Val m)] -> GolfState m
 emptyWith prel = empty { variables_ = M.fromList prel }
+
+-- | A wrapper around IO where output can be directed to a string, for testing
+-- purposes.
+type WrappedIO = WriterT [String] IO
+
+runWrappedIO :: WrappedIO a -> IO (a, String)
+runWrappedIO = fmap (\(x, strs) -> (x, concat strs)) . runWriterT
+
+primPrintWrapped :: Golf WrappedIO ()
+primPrintWrapped = pop >>= lift . lift . tell . (:[]) . output
+
+preludeWrappedIO :: [(String, Val WrappedIO)]
+preludeWrappedIO = prelude ++
+  [ ("print", prim primPrintWrapped)
+  , ("puts", Blk $ strBlock "print n print")
+  , ("p", Blk $ strBlock "`puts")
+  , ("rand", prim primRand)
+  ]

@@ -13,7 +13,7 @@ main = getArgs >>= \argv -> case argv of
 
 go :: String -> String -> IO ()
 go input prog = do
-  let p = parse $ scan prog
+  let p = eval prog
       s = emptyWith preludeIO
   result <- runGolf (push (Str input) >> runs p >> fmap output stackToArr) s
   case result of

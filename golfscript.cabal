@@ -29,4 +29,5 @@ Test-Suite test-golfscript
   type:             exitcode-stdio-1.0
   main-is:          test.hs
   other-modules:    Paths_golfscript
-  build-depends:    base, filepath, directory, process
+  build-depends:    base, filepath, directory, process, golfscript
+  ghc-options:      -Wall
