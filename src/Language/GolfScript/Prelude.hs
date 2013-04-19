@@ -484,7 +484,8 @@ question = order >>= \o -> case o of
   where findBy _   []     = return ()
         findBy blk (x:xs) = push x >> predicate blk >>= \b ->
           if b then push x else findBy blk xs
-        indexOf x xs = push $ Int $ fromMaybe (-1) $ lookup x $ zip xs [0..]
+        indexOf x xs =
+          push $ Int $ fromIntegral $ fromMaybe (-1) $ elemIndex x xs
 
 infixOf :: (Eq a) => [a] -> [a] -> Maybe Int
 xs `infixOf` ys = findIndex (xs `isPrefixOf`) $ tails ys
