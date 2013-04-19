@@ -4,9 +4,10 @@ import Paths_golfscript (getDataFileName)
 import System.FilePath (takeDirectory, replaceDirectory, takeFileName)
 import System.Directory (getDirectoryContents, doesFileExist)
 import Data.Maybe (fromMaybe)
-import Control.Monad (forM_)
+import Control.Monad (forM_, when)
 import Data.List (stripPrefix)
 import System.Process (readProcess)
+import Data.IORef
 
 import Language.GolfScript.Base
 import Language.GolfScript.Prelude hiding (rb)
@@ -17,6 +18,7 @@ main = do
   rb <- getDataFileName "test/golfscript.rb"
   let testDir = takeDirectory rb
   files <- getDirectoryContents testDir
+  failure <- newIORef False
   forM_ files $ \f -> fromMaybe (return ()) $ do
     g <- stripPrefix "test" f
     h <- stripPrefix "gorp." $ reverse g
@@ -29,14 +31,16 @@ main = do
       rubyOut <- runRuby rb fprog input
       haskellOut <- runHaskell fprog input
       if rubyOut == haskellOut
-        then putStrLn $ "Test " ++ f ++ " passed."
+        then putStrLn $ "PASSED: Test " ++ f
         else mapM_ putStrLn
           [ "FAILED: Test " ++ f
           , "<Ruby output>"
           , rubyOut
           , "<Haskell output>"
           , haskellOut
-          ] >> error "Test failed. See log for details."
+          ] >> writeIORef failure True
+  failed <- readIORef failure
+  when failed $ error "At least one test failed."
 
 runRuby :: FilePath -> FilePath -> String -> IO String
 runRuby rb fprog input = readProcess "ruby" [rb, fprog] input
