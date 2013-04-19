@@ -1,7 +1,7 @@
 module Main where
 
 import Paths_golfscript (getDataFileName)
-import System.FilePath (takeDirectory)
+import System.FilePath (takeDirectory, replaceDirectory)
 import System.Directory (getDirectoryContents, doesFileExist)
 import Data.Maybe (fromMaybe)
 import Control.Monad (forM_)
@@ -16,13 +16,26 @@ main = do
     g <- stripPrefix "test" f
     h <- stripPrefix "gorp." $ reverse g
     let j = "test" ++ reverse h
-        fin = j ++ ".in"
-        fout = j ++ ".out"
-    Just $ doesFileExist fin >>= \b -> if b
-      then undefined -- TODO: test with input file
-      else undefined -- TODO: test without input file
+        fprog = replaceDirectory f testDir
+        fin = replaceDirectory (j ++ ".in") testDir
+        fout = replaceDirectory (j ++ ".out") testDir
+    Just $ do
+      b <- doesFileExist fin
+      input <- if b then readFile fin else return ""
+      rubyOut <- runRuby rb fprog input
+      haskellOut <- runHaskell fprog input
+      if rubyOut == haskellOut
+        then putStrLn $ "Test " ++ f ++ " passed."
+        else mapM_ putStrLn
+          [ "FAILED: Test " ++ f
+          , "<Ruby output>"
+          , rubyOut
+          , "<Haskell output>"
+          , haskellOut
+          ]
 
-runRuby :: FilePath -> FilePath -> Maybe FilePath -> IO String
-runRuby rb fprog fin = do
-  input <- maybe (return "") readFile fin
-  readProcess "ruby" [rb, fprog] input
+runRuby :: FilePath -> FilePath -> String -> IO String
+runRuby rb fprog input = readProcess "ruby" [rb, fprog] input
+
+runHaskell :: FilePath -> String -> IO String
+runHaskell fprog input = undefined
