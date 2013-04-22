@@ -30,30 +30,34 @@ main = do
       input <- if b then readFile fin else return ""
       rubyOut <- runRuby rb fprog input
       haskellOut <- runHaskell fprog input
-      if rubyOut == haskellOut
-        then putStrLn $ "PASSED: Test " ++ f
-        else mapM_ putStrLn
-          [ "FAILED: Test " ++ f
-          , "<Ruby output>"
-          , rubyOut
-          , "<Haskell output>"
-          , haskellOut
-          ] >> writeIORef failure True
+      case haskellOut of
+        Left herr -> do
+          putStrLn herr
+          writeIORef failure True
+        Right hout -> if rubyOut == hout
+          then putStrLn $ "PASSED: Test " ++ f
+          else mapM_ putStrLn
+            [ "FAILED: Test " ++ f
+            , "<Ruby output>"
+            , rubyOut
+            , "<Haskell output>"
+            , hout
+            ] >> writeIORef failure True
   failed <- readIORef failure
   when failed $ error "At least one test failed."
 
 runRuby :: FilePath -> FilePath -> String -> IO String
 runRuby rb fprog input = readProcess "ruby" [rb, fprog] input
 
-runHaskell :: FilePath -> String -> IO String
+runHaskell :: FilePath -> String -> IO (Either String String)
 runHaskell fprog input = do
   p <- fmap eval $ readFile fprog
   let golf = push (Str input) >> runs p >> fmap output stackToArr
   result <- runWrappedIO $ runGolf golf wrappedState
   case result of
-    (Left err, _) -> error $
-      "ERROR in Haskell test " ++ takeFileName fprog ++ ": " ++ err
-    (Right stk, out) -> return $ out ++ stk ++ "\n"
+    (Left err, _) -> return $ Left $
+      "FAILED: Test " ++ takeFileName fprog ++ ", Haskell error: " ++ err
+    (Right stk, out) -> return $ Right $ out ++ stk ++ "\n"
 
 wrappedState :: GolfState WrappedIO
 wrappedState = emptyWith preludeWrappedIO
