@@ -168,9 +168,9 @@ unparse = concatMap $ \d -> case d of
     Str s -> [StrLit s]
     Blk b -> [LBrace] ++ unparse (blockDo_ b) ++ [RBrace]
 
---- | Produces a program which executes a series of actions, with two conditions:
---- the array bracket operators aren't overwritten, and the space character
---- hasn't been assigned a value.
+-- | Produces a program which executes a series of actions, with two conditions:
+-- the array bracket operators aren't overwritten, and the space character
+-- hasn't been assigned a value.
 uneval :: [Do m] -> String
 uneval = unscan . unparse
 
