@@ -25,14 +25,14 @@ main = do
     else return ()
 
 isTest :: FilePath -> Maybe FilePath
-isTest = stripPrefix "test" >=> stripSuffix ".prog" where
+isTest = stripPrefix "test" >=> stripSuffix ".gs" where
   stripSuffix sfx str = fmap reverse $ stripPrefix (reverse sfx) (reverse str)
 
 getTests :: IO [(FilePath, String)]
 getTests = do
   tests <- fmap (mapMaybe isTest) $ getDirectoryContents "."
   forM tests $ \tst -> do
-    let program = "test" ++ tst ++ ".prog"
+    let program = "test" ++ tst ++ ".gs"
         input   = "test" ++ tst ++ ".in"
     b <- doesFileExist input
     if b then readFile input >>= \i -> return (program, i)
@@ -53,7 +53,7 @@ runHaskell fprog input = do
   let golf = push (Str input) >> runs p >> fmap output stackToArr
   result <- runWrappedIO $ runGolf golf wrappedState
   case result of
-    (Left err,  _)   -> error $ "Haskell error: " ++ err
+    (Left err,  _)   -> error $ fprog ++ "\nHaskell error: " ++ err
     (Right stk, out) -> return $ out ++ stk ++ "\n"
 
 wrappedState :: GolfState WrappedIO
