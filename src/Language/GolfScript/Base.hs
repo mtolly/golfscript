@@ -138,8 +138,9 @@ run d = case d of
     Nothing      -> return ()
     Just (Blk b) -> runs (blockDo_ b) -- execute block
     Just x       -> push x            -- push non-block onto stack
-  Set v -> pop >>= \x -> variables >>= setVariables . M.insert v x
-    -- todo: what if stack is empty? crash or nothing?
+  Set v -> stack >>= \stk -> case stk of
+    x : _ -> variables >>= setVariables . M.insert v x
+    _     -> return ()
   Prim (P f) -> f
   Push x -> push x
 
