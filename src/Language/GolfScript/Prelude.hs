@@ -1,6 +1,10 @@
 {-# LANGUAGE ViewPatterns #-}
 {- | The standard set of built-in functions included with GolfScript. -}
-module Language.GolfScript.Prelude where
+module Language.GolfScript.Prelude
+( prelude, preludeIO, preludeWrappedIO
+, emptyWith
+, WrappedIO, runWrappedIO
+) where
 
 import Language.GolfScript.Base
 import Language.GolfScript.Parse

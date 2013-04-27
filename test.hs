@@ -11,7 +11,7 @@ import System.Process (readProcess)
 import Test.HUnit
 
 import Language.GolfScript.Base
-import Language.GolfScript.Prelude hiding (rb)
+import Language.GolfScript.Prelude
 import Language.GolfScript.Parse
 
 main :: IO ()
