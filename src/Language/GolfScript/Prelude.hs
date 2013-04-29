@@ -414,11 +414,14 @@ percent' o = case o of
   where every i xs = map head $ chunksOf i xs
         cleanSplitOn xs ys = filter (not . null) $ splitOn xs ys
         mapArr blk arr = liftM concat $ forM arr $ \v -> do
-          lb
+          len <- liftM length stack
           push v
           execute blk
-          rb
-          liftM anyToArr pop
+          len2 <- liftM length stack
+          let diff = len2 - len
+          (tk, dp) <- liftM (splitAt diff) stack
+          setStack dp
+          return $ reverse tk
 
 percent :: (Monad m) => Golf m ()
 percent = order >>= percent' >>= push
