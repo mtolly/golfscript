@@ -6,7 +6,8 @@ import System.Directory (getDirectoryContents, doesFileExist, setCurrentDirector
 import Data.Maybe (mapMaybe)
 import Control.Monad (forM, (>=>))
 import Data.List (stripPrefix)
-import System.Process (readProcess)
+import System.Process (readProcessWithExitCode)
+import System.Exit (ExitCode(..))
 
 import Test.HUnit
 
@@ -42,19 +43,25 @@ makeTest :: FilePath -> String -> Test
 makeTest prog input = TestCase $ do
   rb <- runRuby prog input
   hs <- runHaskell prog input
-  assertEqual prog rb hs
+  case (rb, hs) of
+    (Left _, Left _) -> return ()
+    _                -> assertEqual prog rb hs
 
-runRuby :: FilePath -> String -> IO String
-runRuby fprog input = readProcess "ruby" ["golfscript.rb", fprog] input
+runRuby :: FilePath -> String -> IO (Either String String)
+runRuby fprog input = do
+  (c, o, e) <- readProcessWithExitCode "ruby" ["golfscript.rb", fprog] input
+  return $ case c of
+    ExitSuccess   -> Right o
+    ExitFailure _ -> Left  e
 
-runHaskell :: FilePath -> String -> IO String
+runHaskell :: FilePath -> String -> IO (Either String String)
 runHaskell fprog input = do
   p <- fmap eval $ readFile fprog
   let golf = push (Str input) >> runs p >> fmap output stackToArr
   result <- runWrappedIO $ runGolf golf wrappedState
-  case result of
-    (Left err,  _)   -> error $ fprog ++ "\nHaskell error: " ++ err
-    (Right stk, out) -> return $ out ++ stk ++ "\n"
+  return $ case result of
+    (Left  err, _)   -> Left  $ fprog ++ "\nHaskell error: " ++ err
+    (Right stk, out) -> Right $ out ++ stk ++ "\n"
 
 wrappedState :: GolfState WrappedIO
 wrappedState = emptyWith preludeWrappedIO
