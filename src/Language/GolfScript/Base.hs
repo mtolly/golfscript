@@ -65,7 +65,7 @@ data GolfState m = GolfState
   { stack_     :: [Val m]
   , brackets_  :: [Int]
   , variables_ :: M.Map String (Val m)
-  }
+  } deriving (Eq, Ord, Show, Read)
 
 type Golf m = StateT (GolfState m) (ErrorT String m)
 

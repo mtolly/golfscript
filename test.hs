@@ -52,7 +52,7 @@ runRuby fprog input = do
   (c, o, e) <- readProcessWithExitCode "ruby" ["golfscript.rb", fprog] input
   return $ case c of
     ExitSuccess   -> Right o
-    ExitFailure _ -> Left  e
+    ExitFailure _ -> Left e
 
 runHaskell :: FilePath -> String -> IO (Either String String)
 runHaskell fprog input = do
@@ -60,7 +60,7 @@ runHaskell fprog input = do
   let golf = push (Str input) >> runs p >> fmap output stackToArr
   result <- runWrappedIO $ runGolf golf wrappedState
   return $ case result of
-    (Left  err, _)   -> Left  $ err
+    (Left  err, _)   -> Left err
     (Right stk, out) -> Right $ out ++ stk ++ "\n"
 
 wrappedState :: GolfState WrappedIO
