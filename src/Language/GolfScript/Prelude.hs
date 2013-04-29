@@ -418,8 +418,7 @@ percent' o = case o of
           push v
           execute blk
           len2 <- liftM length stack
-          let diff = len2 - len
-          (tk, dp) <- liftM (splitAt diff) stack
+          (tk, dp) <- liftM (splitAt $ len2 - len) stack
           setStack dp
           return $ reverse tk
 

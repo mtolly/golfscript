@@ -60,7 +60,7 @@ runHaskell fprog input = do
   let golf = push (Str input) >> runs p >> fmap output stackToArr
   result <- runWrappedIO $ runGolf golf wrappedState
   return $ case result of
-    (Left  err, _)   -> Left  $ fprog ++ "\nHaskell error: " ++ err
+    (Left  err, _)   -> Left  $ err
     (Right stk, out) -> Right $ out ++ stk ++ "\n"
 
 wrappedState :: GolfState WrappedIO
