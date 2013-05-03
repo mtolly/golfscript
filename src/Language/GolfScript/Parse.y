@@ -26,6 +26,7 @@ import Data.List (intersperse)
 %%
 
 DoList : Do DoList { $1 : $2 }
+       | ':' { [] }
        | { [] }
 
 Do : int { case $1 of (i, s) -> Get s (Just $ Int i) }
