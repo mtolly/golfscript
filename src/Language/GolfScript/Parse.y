@@ -25,8 +25,17 @@ import Data.List (intersperse)
 
 %%
 
+TopList : Do TopList { $1 : $2 }
+        | ':' str TopList { $3 }
+        | ':' '{' TopList { $3 }
+        | ':' '}' TopList { $3 }
+        | ':' { [] }
+        | { [] }
+
 DoList : Do DoList { $1 : $2 }
-       | ':' { [] }
+       | ':' str DoList { $3 }
+       | ':' '{' DoList { $3 }
+       | ':' '}' DoList { $3 }
        | { [] }
 
 Do : int { case $1 of (i, s) -> Get s (Just $ Int i) }
