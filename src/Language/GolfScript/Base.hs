@@ -119,6 +119,7 @@ push x = do
   stack >>= setStack . (x :)
   brackets >>= setBrackets . map (+ 1)
 
+-- | Pop a value off the stack, or Nothing if the stack is empty.
 popMaybe :: (Monad m) => Golf m (Maybe (Val m))
 popMaybe = stack >>= \s -> case s of
   [] -> return Nothing
@@ -127,7 +128,7 @@ popMaybe = stack >>= \s -> case s of
     brackets >>= setBrackets . map sub1
     return $ Just x
 
--- | Pop a value off the stack, or Nothing if the stack is empty.
+-- | Pop a value off the stack, or crash if the stack is empty.
 pop :: (Monad m) => Golf m (Val m)
 pop = popMaybe >>= maybe (crash "pop: empty stack") return
 
