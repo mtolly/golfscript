@@ -1,29 +1,24 @@
-GolfScript interpreter in Haskell
-=================================
+# GolfScript interpreter in Haskell
 
-By Michael Tolly
-----------------
+## By Michael Tolly
 
-More or less completed features:
+An alternate implementation of the terse
+[GolfScript](http://www.golfscript.com/golfscript/) language. All features
+should be supported except for Ruby string interpolation. The language has many
+corner cases, so please notify me if you find a difference in behavior from the
+original Ruby implementation!
 
-* All the original implementation's built-in functions and features, except for
-  Ruby string interpolation. The original Ruby code has lots of behavior which
-  was probably not intended by the developer; I've tried to replicate this
-  behavior where practical (that is, where it did not enormously complicate the
-  implementation). There are still a few kinks to work out; more testing needed.
+### Usage
 
-* The entire interpreter, including top-level state, data values, and built-in
-  functions, are parameterized by a monad. You can fill this with Identity or IO
-  (or any other useful monad) to choose between a pure and impure interpreter;
-  only the impure interpreter has explicit print commands.
+    cabal install
+    golf prog.gs < stdin.txt
+    golf < prog.gs
 
-* Just as non-strict as Haskell. This allows more legal programs than the Ruby
-  implementation; for example, you can work with infinite stacks.
+### Testing
 
-Planned features:
-
-* Customizable error/warning handling, for situations such as: popping from an
-  empty stack, invalid type arguments given to a function, writing to whitespace
-  variable names, and reading from undefined variables (other than whitespace).
-  This would be massively helpful when debugging a program (also, helpful for me
-  in debugging the interpreter's behavior!).
+`cabal test` runs a variety of included programs (taken from the
+[Anarchy Golf](http://golf.shinh.org/) server) to verify output against the
+official Ruby interpreter (make sure `ruby` is in your path). See the `test`
+folder for the required format. A test succeeds if both versions succeed with
+the exact same stdout, or if both versions exit with a non-success code (on the
+Ruby side, this indicates a Ruby exception).
