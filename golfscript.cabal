@@ -1,8 +1,8 @@
 Name:               golfscript
-Version:            0.0.1
+Version:            0.1
 Synopsis:           GolfScript, a terse programming language by Darren Smith.
 Author:             Michael Tolly
-Maintainer:         tolly@wisc.edu
+Maintainer:         onyxite@gmail.com
 Build-Type:         Simple
 Cabal-version:      >= 1.8
 Category:           Data
