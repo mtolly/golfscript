@@ -1,19 +1,21 @@
 module Main where
 
-import Paths_golfscript (getDataFileName)
-import System.FilePath (takeDirectory)
-import System.Directory (getDirectoryContents, doesFileExist, setCurrentDirectory)
-import Data.Maybe (mapMaybe)
 import Control.Monad (forM, (>=>))
 import Data.List (stripPrefix)
-import System.Process (readProcessWithExitCode)
+import Data.Maybe (mapMaybe)
 import System.Exit (ExitCode(..))
 
+import System.Directory
+  ( getDirectoryContents, doesFileExist, setCurrentDirectory
+  )
+import System.FilePath (takeDirectory)
+import System.Process (readProcessWithExitCode)
 import Test.HUnit
 
 import Language.GolfScript.Base
-import Language.GolfScript.Prelude
 import Language.GolfScript.Parse
+import Language.GolfScript.Prelude
+import Paths_golfscript (getDataFileName)
 
 main :: IO ()
 main = do

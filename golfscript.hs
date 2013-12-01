@@ -1,10 +1,11 @@
 module Main where
 
+import System.Environment (getArgs, getProgName)
+import System.IO (hPutStrLn, stderr)
+
 import Language.GolfScript.Base
 import Language.GolfScript.Parse
 import Language.GolfScript.Prelude
-import System.Environment
-import System.IO (hPutStrLn, stderr)
 
 main :: IO ()
 main = getArgs >>= \argv -> case argv of

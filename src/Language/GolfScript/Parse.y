@@ -6,9 +6,10 @@ module Language.GolfScript.Parse
 , strBlock
 ) where
 
+import Data.List (intersperse)
+
 import Language.GolfScript.Base
 import Language.GolfScript.Scan
-import Data.List (intersperse)
 }
 
 %name parse

@@ -6,19 +6,28 @@ module Language.GolfScript.Prelude
 , WrappedIO, runWrappedIO
 ) where
 
+import Control.Monad
+  ( unless, when, liftM, forM, forM_, replicateM_, filterM, replicateM
+  , liftM2, liftM3
+  )
+import Data.Bits ((.&.), (.|.), xor, complement)
+import Data.List
+  ( transpose, unfoldr, tails, isPrefixOf, findIndex, elemIndex
+  , genericTake, genericDrop, genericLength, intersect, intercalate
+  , genericReplicate, union, (\\), nub, sort, sortBy
+  )
+import Data.Maybe (fromMaybe)
+import Data.Ord (comparing)
+
+import Control.Monad.IO.Class (liftIO, MonadIO)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Writer (runWriterT, tell, WriterT)
+import qualified Data.HashMap as M
+import Data.List.Split (splitOn, chunksOf)
+import System.Random (randomR, getStdRandom)
+
 import Language.GolfScript.Base
 import Language.GolfScript.Parse
-import qualified Data.HashMap as M
-import Data.Bits
-import Control.Monad.IO.Class
-import Control.Monad
-import Data.Maybe
-import Data.List
-import Data.Ord
-import Data.List.Split
-import System.Random
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Writer
 
 -- | Two values popped off the stack, coerced to the same type. For @Foos x y@,
 -- @y@ was on top of @x@ in the original stack.

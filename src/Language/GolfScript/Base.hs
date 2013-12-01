@@ -17,14 +17,16 @@ module Language.GolfScript.Base
 , runGolf
 ) where
 
-import qualified Data.HashMap as M
-import Control.Monad
-import Data.List (intersperse)
-import Language.GolfScript.Scan
 import Control.Applicative ((<|>))
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Error
-import Control.Monad.Trans.Class
+import Control.Monad (liftM)
+import Data.List (intersperse)
+
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Error (runErrorT, throwError, ErrorT)
+import Control.Monad.Trans.State (gets, modify, evalStateT, StateT)
+import qualified Data.HashMap as M
+
+import Language.GolfScript.Scan
 
 -- | A value, parametrized by a monad for primitive functions.
 data Val m
