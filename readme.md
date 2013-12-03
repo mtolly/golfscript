@@ -14,8 +14,8 @@ original Ruby implementation!
     cd golfscript
     cabal install
     
-    golf prog.gs < stdin.txt # program and stdin
-    golf < prog.gs           # just program, empty stdin
+    golfscript prog.gs < stdin.txt # program and stdin
+    golfscript < prog.gs           # just program, empty stdin
 
 ### Testing
 
