@@ -1,6 +1,6 @@
 # GolfScript interpreter in Haskell
 
-## By Michael Tolly
+[![Build Status](https://travis-ci.org/mtolly/golfscript.png?branch=master)](https://travis-ci.org/mtolly/golfscript)
 
 An alternate implementation of the terse
 [GolfScript](http://www.golfscript.com/golfscript/) language. All features
@@ -10,9 +10,12 @@ original Ruby implementation!
 
 ### Usage
 
+    cabal install alex happy
+    cd golfscript
     cabal install
-    golf prog.gs < stdin.txt
-    golf < prog.gs
+    
+    golf prog.gs < stdin.txt # program and stdin
+    golf < prog.gs           # just program, empty stdin
 
 ### Testing
 
