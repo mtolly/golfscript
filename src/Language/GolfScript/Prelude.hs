@@ -1,4 +1,3 @@
-{-# LANGUAGE ViewPatterns #-}
 {- | The standard set of built-in functions included with GolfScript. -}
 module Language.GolfScript.Prelude
 ( prelude, preludeIO, preludeWrappedIO
@@ -6,11 +5,13 @@ module Language.GolfScript.Prelude
 , WrappedIO, runWrappedIO
 ) where
 
+import Control.Arrow (second)
 import Control.Monad
   ( unless, when, liftM, forM, forM_, replicateM_, filterM, replicateM
   , liftM2, liftM3
   )
 import Data.Bits ((.&.), (.|.), xor, complement)
+import Data.Foldable (mapM_)
 import Data.List
   ( transpose, unfoldr, tails, isPrefixOf, findIndex, elemIndex
   , genericTake, genericDrop, genericLength, intersect, intercalate
@@ -18,6 +19,7 @@ import Data.List
   )
 import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
+import Prelude hiding (mapM_)
 
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Class (lift)
@@ -260,12 +262,15 @@ lp = pop >>= \x -> case x of
 rp :: (Monad m) => Golf m ()
 rp = pop >>= \x -> case x of
   Int i -> push $ Int $ i + 1
-  Arr (unsnoc -> Just (vs, v)) -> push (Arr vs) >> push v
-  Str (unsnoc -> Just (cs, c)) -> push (Str cs) >> push (Int $ c2i c)
-  Blk (Block {blockStr_ = unsnoc -> Just (cs, c)}) -> do
-    push $ Blk $ strBlock cs
-    push $ Int $ c2i c
-  _ -> crash "')' tried to right-uncons empty arr/str/blk"
+  Arr a -> case unsnoc a of
+    Nothing      -> crash "')' tried to right-uncons empty array"
+    Just (vs, v) -> push (Arr vs) >> push v
+  Str s -> case unsnoc s of
+    Nothing      -> crash "')' tried to right-uncons empty string"
+    Just (cs, c) -> push (Str cs) >> push (Int $ c2i c)
+  Blk b -> case unsnoc $ blockStr_ b of
+    Nothing      -> crash "')' tried to right-uncons empty block"
+    Just (cs, c) -> push (Blk $ strBlock cs) >> push (Int $ c2i c)
 
 -- | @`@ uneval: convert a value to the code which generates that value
 backtick :: (Monad m) => Golf m ()
@@ -279,9 +284,9 @@ backtick = pop >>= \x -> push $ Str $ uneval [Push x]
 -- sort by mapping (blk)
 dollar :: (Monad m) => Golf m ()
 dollar = pop >>= \x -> case x of
-  Int i -> stack >>= \stk -> case lookup i (zip [0..] stk) of
-    Nothing -> return ()
-    Just v  -> push v
+  Int i -> stack >>= \stk -> mapM_ push $ lookup i $ if i >= 0
+    then zip [0..] stk
+    else zip [-1,-2..] $ reverse stk
   Arr a -> push $ Arr $ sort a -- in .rb, sorting different types is an error
   Str s -> push $ Str $ sort s
   Blk b -> pop >>= \y -> case y of
@@ -487,12 +492,11 @@ equal = order >>= \o -> case o of
   BlkBlk x y -> push $ unbool $ blockStr_ x == blockStr_ y
   ArrStr x y -> push $ unbool $ x == strToArr y
   StrBlk x y -> push $ unbool $ x == blockStr_ y
+  ArrBlk x y -> push $ unbool $ x == strToArr (blockStr_ y)
   -- Get element at index, or nothing.
   IntArr x y -> maybe (return ()) push $ index x y
   IntStr x y -> maybe (return ()) (push . Int . c2i) $ index x y
   IntBlk x y -> maybe (return ()) (push . Int . c2i) $ index x $ blockStr_ y
-  -- Always false.
-  ArrBlk _ _ -> push $ Int 0
   where index n xs = lookup n $ if n < 0
           then zip [-1, -2 ..] $ reverse xs
           else zip [0 ..] xs
@@ -617,15 +621,15 @@ prelude =
   , (">", prim greater)
   , ("=", prim equal)
   , ("?", prim question)
-  , ("and", Blk $ strBlock "1$if")
-  , ("or", Blk $ strBlock "1$\\if")
-  , ("xor", Blk $ strBlock "\\!!{!}*")
-  , ("n", Blk $ strBlock "\"\\n\"")
-  , ("do", prim primDo)
-  , ("if", prim primIf)
-  , ("abs", prim primAbs)
-  , ("zip", prim primZip)
-  , ("base", prim primBase)
+  , ("and"  , Blk $ strBlock "1$if")
+  , ("or"   , Blk $ strBlock "1$\\if")
+  , ("xor"  , Blk $ strBlock "\\!!{!}*")
+  , ("n"    , Blk $ strBlock "\"\\n\"")
+  , ("do"   , prim primDo)
+  , ("if"   , prim primIf)
+  , ("abs"  , prim primAbs)
+  , ("zip"  , prim primZip)
+  , ("base" , prim primBase)
   , ("while", prim primWhile)
   , ("until", prim primUntil)
   ]
@@ -634,9 +638,9 @@ prelude =
 preludeIO :: [(String, Val IO)]
 preludeIO = prelude ++
   [ ("print", prim primPrint)
-  , ("puts", Blk $ strBlock "print n print")
-  , ("p", Blk $ strBlock "`puts")
-  , ("rand", prim primRand)
+  , ("puts" , Blk $ strBlock "print n print")
+  , ("p"    , Blk $ strBlock "`puts")
+  , ("rand" , prim primRand)
   ]
 
 -- | Returns an initial state with a certain prelude loaded.
@@ -648,7 +652,7 @@ emptyWith prel = empty { variables_ = M.fromList prel }
 type WrappedIO = WriterT [String] IO
 
 runWrappedIO :: WrappedIO a -> IO (a, String)
-runWrappedIO = fmap (\(x, strs) -> (x, concat strs)) . runWriterT
+runWrappedIO = fmap (second concat) . runWriterT
 
 primPrintWrapped :: Golf WrappedIO ()
 primPrintWrapped = pop >>= lift . lift . tell . (:[]) . output
@@ -656,7 +660,7 @@ primPrintWrapped = pop >>= lift . lift . tell . (:[]) . output
 preludeWrappedIO :: [(String, Val WrappedIO)]
 preludeWrappedIO = prelude ++
   [ ("print", prim primPrintWrapped)
-  , ("puts", Blk $ strBlock "print n print")
-  , ("p", Blk $ strBlock "`puts")
-  , ("rand", prim primRand)
+  , ("puts" , Blk $ strBlock "print n print")
+  , ("p"    , Blk $ strBlock "`puts")
+  , ("rand" , prim primRand)
   ]
