@@ -529,13 +529,23 @@ xs `infixOf` ys = findIndex (xs `isPrefixOf`) $ tails ys
 
 primDo :: (Monad m) => Golf m ()
 primDo = pop >>= \x -> case x of
-  Blk b -> go where go = predicate b >>= \p -> when p go
+  Blk b -> go where go = predicate' b >>= \p -> when p go
   _ -> crash "primDo: 'do' expects block on top of stack"
 
+-- | Like predicate, but dynamically calls @!@ and then checks if that leaves 0.
+predicate' :: (Monad m) => Block m -> Golf m Bool
+predicate' b = execute b >> dynamicBool
+
+dynamicBool :: (Monad m) => Golf m Bool
+dynamicBool = run (Get "!" Nothing) >> liftM (== Int 0) pop
+
 primIf :: (Monad m) => Golf m ()
-primIf = pop3 >>= \(x, y, z) -> case if bool x then y else z of
-  Blk b -> execute b
-  v     -> push v
+primIf = do
+  (t, f) <- pop2
+  b <- dynamicBool
+  case if b then t else f of
+    Blk blk -> execute blk
+    v       -> push v
 
 primAbs :: (Monad m) => Golf m ()
 primAbs = pop >>= \x -> case x of
@@ -572,13 +582,13 @@ primBase = pop2 >>= \(x, y) -> case (x, y) of
 primWhile :: (Monad m) => Golf m ()
 primWhile = pop2 >>= uncurry f where
   f (Blk cond) (Blk body) = go where
-    go = predicate cond >>= \b -> when b $ execute body >> go
+    go = predicate' cond >>= \b -> when b $ execute body >> go
   f _ _ = crash "primWhile: 'while' expected 2 block arguments"
 
 primUntil :: (Monad m) => Golf m ()
 primUntil = pop2 >>= uncurry f where
   f (Blk cond) (Blk body) = go where
-    go = predicate cond >>= \b -> unless b $ execute body >> go
+    go = predicate' cond >>= \b -> unless b $ execute body >> go
   f _ _ = crash "primUntil: 'until' expected 2 block arguments"
 
 primPrint :: Golf IO ()
