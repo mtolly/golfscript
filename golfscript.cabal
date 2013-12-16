@@ -1,6 +1,15 @@
 Name:               golfscript
 Version:            0.1
 Synopsis:           GolfScript, a terse programming language by Darren Smith.
+
+Description:        GolfScript is a terse stack-based programming language
+                    designed to win Code Golf competitions, solving problems
+                    using the least amount of source code characters. The
+                    language design and original interpreter in Ruby are by
+                    Darren Smith. This is a ground-up reimplementation in
+                    Haskell, aiming to support all features except for Ruby
+                    string interpolation.
+
 Author:             Michael Tolly
 Maintainer:         onyxite@gmail.com
 Build-Type:         Simple
@@ -41,3 +50,7 @@ Test-Suite test-golfscript
                     , HUnit >= 1.2 && < 1.3
                     , golfscript
   Ghc-Options:      -Wall
+
+Source-Repository head
+  Type:             git
+  location:         git://github.com/mtolly/golfscript.git

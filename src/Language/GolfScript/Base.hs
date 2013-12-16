@@ -57,9 +57,13 @@ data Block m = Block
 -- | An opaque built-in monadic function. Because of the way the stack works, a
 -- program can only execute Prim values; it can never handle them directly.
 newtype Prim m = P { runP :: Golf m () }
+-- | Dummy instance, error
 instance Eq   (Prim m) where _ == _      = error "(==): can't equate Prim"
+-- | Dummy instance, error
 instance Ord  (Prim m) where compare _ _ = error "compare: can't compare Prim"
+-- | Dummy instance, just prints @\"\<prim\>\"@
 instance Show (Prim m) where show _      = "<prim>"
+-- | Dummy instance, error
 instance Read (Prim m) where readsPrec   = error "readsPrec: can't read Prim"
 
 -- | The state of a GolfScript program.

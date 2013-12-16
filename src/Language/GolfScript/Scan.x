@@ -29,9 +29,13 @@ $alphascore ($alphascore|$digit)+ { Var }
 
 {
 
+-- | Scanned token type for GolfScript code.
 data Token
   = Var String
+  -- ^ A variable read/write, except for integer literals.
   | IntLit (Integer, String)
+  -- ^ Integer literals can also be variables. If so, the variable name is the
+  -- exact lexed token, which is the `String` in the pair.
   | StrLit String
   | LBrace
   | RBrace

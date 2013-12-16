@@ -51,10 +51,11 @@ Do : int { case $1 of (i, s) -> Get s (Just $ Int i) }
 parseError :: [Token] -> a
 parseError _ = error "Parse error"
 
+-- | Lexes and parses a program in one step.
 eval :: String -> [Do m]
 eval = parse . scan
 
--- | Creates a block by generating a program, given a string representation.
+-- | Creates a block by parsing a string of code.
 strBlock :: String -> Block m
 strBlock str = Block { blockDo_ = eval str, blockStr_ = str }
 
