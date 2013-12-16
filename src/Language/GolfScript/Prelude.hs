@@ -383,8 +383,13 @@ slash = order >>= \o -> case o of
   -- int/int: divide
   IntInt x y -> push $ Int $ div x y
   -- int/seq: split seq into chunks of n elements
-  IntArr x y -> push $ Arr $ map Arr $ chunksOf (fromIntegral x) y
-  IntStr x y -> push $ Arr $ map Str $ chunksOf (fromIntegral x) y
+  -- if int is negative, reverse before chunking
+  IntArr x y -> push $ Arr $ map Arr $ if x < 0
+    then chunksOf (fromIntegral $ abs x) (reverse y)
+    else chunksOf (fromIntegral x) y
+  IntStr x y -> push $ Arr $ map Str $ if x < 0
+    then chunksOf (fromIntegral $ abs x) (reverse y)
+    else chunksOf (fromIntegral x) y
   -- seq/seq: split x on occurrences of y
   ArrArr x y -> push $ Arr $ map Arr $ splitOn y x
   ArrStr x y -> push $ Arr $ map Arr $ splitOn (strToArr y) x
