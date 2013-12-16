@@ -231,7 +231,7 @@ backslash = pop2 >>= \(x, y) -> push y >> push x
 semicolon :: (Monad m) => Golf m ()
 semicolon = popMaybe >> return ()
 
--- | @,@ make @[0..n]@ (int), length (arr\/str), filter arr\/str by key (blk)
+-- | @,@ make @[0..n-1]@ (int), length (arr\/str), filter arr\/str by key (blk)
 comma :: (Monad m) => Golf m ()
 comma = pop >>= \x -> case x of
   Int i -> push $ Arr $ map Int [0 .. i-1]
@@ -251,7 +251,10 @@ lp = pop >>= \x -> case x of
   Int i -> push $ Int $ i - 1
   Arr (v : vs) -> push (Arr vs) >> push v
   Str (c : cs) -> push (Str cs) >> push (Int $ c2i c)
-  _ -> push x
+  Blk (Block {blockStr_ = c : cs}) -> do
+    push $ Blk $ strBlock cs
+    push $ Int $ c2i c
+  _ -> crash "'(' tried to left-uncons empty arr/str/blk"
 
 -- | @)@ increment (int), uncons from right (arr\/str)
 rp :: (Monad m) => Golf m ()
@@ -259,7 +262,10 @@ rp = pop >>= \x -> case x of
   Int i -> push $ Int $ i + 1
   Arr (unsnoc -> Just (vs, v)) -> push (Arr vs) >> push v
   Str (unsnoc -> Just (cs, c)) -> push (Str cs) >> push (Int $ c2i c)
-  _ -> push x
+  Blk (Block {blockStr_ = unsnoc -> Just (cs, c)}) -> do
+    push $ Blk $ strBlock cs
+    push $ Int $ c2i c
+  _ -> crash "')' tried to right-uncons empty arr/str/blk"
 
 -- | @`@ uneval: convert a value to the code which generates that value
 backtick :: (Monad m) => Golf m ()
@@ -281,7 +287,8 @@ dollar = pop >>= \x -> case x of
   Blk b -> pop >>= \y -> case y of
     Arr a -> sortOnM f a >>= push . Arr
     Str s -> sortOnM (f . Int . c2i) s >>= push . Str
-    _ -> undefined
+    Blk b' -> sortOnM (f . Int . c2i) (blockStr_ b') >>= push . Blk . strBlock
+    Int _ -> crash "'$' tried to sort an integer via a block"
     where f z = push z >> execute b >> pop
 
 sortOnM :: (Ord b, Monad m) => (a -> m b) -> [a] -> m [a]
