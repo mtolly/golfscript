@@ -55,15 +55,19 @@ parseError _ = error "Parse error"
 eval :: String -> [Do m]
 eval = parse . scan
 
+-- | Replaces all position markers with a position of Nothing, marking it as
+-- dynamically eval'd code.
 noPosition :: [Do m] -> [Do m]
-noPosition = mapMaybe $ \x -> case x of
-  Posn _ -> Nothing
-  Push (Blk (Block d s)) -> Just $ Push $ Blk $ Block (noPosition d) s
-  Get v (Just (Blk (Block d s))) -> Just $ Get v $ Just $ Blk $ Block (noPosition d) s
-  _ -> Just x
+noPosition = map $ \x -> case x of
+  Posn _                         -> Posn Nothing
+  Push (Blk (Block d s))         -> Push $ Blk $ Block (noPosition d) s
+  Get v (Just (Blk (Block d s))) -> Get v $ Just $ Blk $ Block (noPosition d) s
+  _                              -> x
 
--- | Creates a block by parsing a string of code.
+-- | Creates a block by parsing a string of code. The resulting code will only
+-- have positions of Nothing, marking it as dynamically eval'd code.
 strBlock :: String -> Block m
-strBlock str = Block { blockDo_ = Posn Nothing : noPosition (eval str), blockStr_ = str }
+strBlock str =
+  Block { blockDo_ = noPosition (eval str), blockStr_ = str }
 
 }
