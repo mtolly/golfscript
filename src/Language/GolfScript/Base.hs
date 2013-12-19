@@ -5,12 +5,15 @@ module Language.GolfScript.Base
 , Block(..)
 , Prim(..)
 , GolfState(..), Golf
-, stack, setStack, brackets, setBrackets, variables, setVariables
+, stack, setStack
+, brackets, setBrackets
+, variables, setVariables
+, position, setPosition
 , doBlock
 , empty
 , push, pop, popMaybe
 , run, runs
-, unscan, unparse, uneval
+, uneval
 , output
 , stackToArr
 , crash
@@ -19,14 +22,11 @@ module Language.GolfScript.Base
 
 import Control.Applicative ((<|>))
 import Control.Monad (liftM)
-import Data.List (intersperse)
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Error (runErrorT, throwError, ErrorT)
 import Control.Monad.Trans.State (gets, modify, evalStateT, StateT)
 import qualified Data.HashMap as M
-
-import Language.GolfScript.Scan
 
 -- | A value, parametrized by a monad for primitive functions.
 data Val m
@@ -46,6 +46,8 @@ data Do m
   -- ^ Write to a variable.
   | Prim (Prim m)
   -- ^ A primitive built-in function.
+  | Posn (Maybe (Int, Int))
+  -- ^ Sets the source position to Nothing (eval'd) or Just (row, column).
   deriving (Eq, Ord, Show, Read)
 
 -- | A block of code with both an executable and string representation.
@@ -71,6 +73,7 @@ data GolfState m = GolfState
   { stack_     :: [Val m]
   , brackets_  :: [Int]
   , variables_ :: M.Map String (Val m)
+  , position_  :: Maybe (Int, Int) -- ^ (line, column)
   } deriving (Eq, Ord, Show, Read)
 
 type Golf m = StateT (GolfState m) (ErrorT String m)
@@ -80,7 +83,9 @@ runGolf :: (Monad m) => Golf m a -> GolfState m -> m (Either String a)
 runGolf g s = runErrorT $ evalStateT g s
 
 crash :: (Monad m) => String -> Golf m a
-crash = lift . throwError
+crash s = position >>= \pos -> lift $ throwError $ case pos of
+  Nothing     -> "<eval>: " ++ s
+  Just (l, c) -> show l ++ ":" ++ show c ++ ": " ++ s
 
 -- | The program stack. Starts out containing a single string of standard input.
 stack :: (Monad m) => Golf m [Val m]
@@ -100,6 +105,12 @@ brackets = gets brackets_
 setBrackets :: (Monad m) => [Int] -> Golf m ()
 setBrackets bs = modify $ \gs -> gs { brackets_ = bs }
 
+position :: (Monad m) => Golf m (Maybe (Int, Int))
+position = gets position_
+
+setPosition :: (Monad m) => Maybe (Int, Int) -> Golf m ()
+setPosition pos = modify $ \gs -> gs { position_ = pos }
+
 -- | Named variables, stored in a hash table.
 variables :: (Monad m) => Golf m (M.Map String (Val m))
 variables = gets variables_
@@ -117,6 +128,7 @@ empty = GolfState
   { stack_      = []
   , brackets_   = []
   , variables_  = M.empty
+  , position_   = Just (1, 1)
   }
 
 -- | Push a value onto the stack.
@@ -150,37 +162,26 @@ run d = case d of
     _     -> return ()
   Prim (P f) -> f
   Push x -> push x
+  Posn p -> setPosition p
 
 -- | Run a list of commands in sequence.
 runs :: (Monad m) => [Do m] -> Golf m ()
 runs = mapM_ run
 
-unscan :: [Token] -> String
-unscan = concatMap $ \t -> case t of
-  Var x -> x
-  IntLit (_, s) -> s
-  StrLit s -> show s
-  LBrace -> "{"
-  RBrace -> "}"
-  Colon -> ":"
-
-unparse :: [Do m] -> [Token]
-unparse = concatMap $ \d -> case d of
-  Get x _ -> [Var x]
-  Set x -> [Colon, Var x]
-  Prim _ -> error "unparse: can't unparse Prim"
-  Push v -> case v of
-    Int i -> [IntLit (i, show i)]
-    Arr a -> [Var "["] ++ inner ++ [Var "]"]
-      where inner = unparse $ intersperse (Get " " Nothing) (map Push a)
-    Str s -> [StrLit s]
-    Blk b -> [LBrace] ++ unparse (blockDo_ b) ++ [RBrace]
-
 -- | Produces a program which executes a series of actions, with two conditions:
 -- the array bracket operators aren't overwritten, and the space character
 -- hasn't been assigned a value.
 uneval :: [Do m] -> String
-uneval = unscan . unparse
+uneval = concatMap $ \d -> case d of
+  Get x _ -> x
+  Set x -> ':' : x
+  Prim _ -> error "unparse: can't unparse Prim"
+  Push v -> case v of
+    Int i -> show i
+    Arr a -> "[" ++ unwords (map (uneval . (: []) . Push) a) ++ "]"
+    Str s -> show s
+    Blk b -> "{" ++ uneval (blockDo_ b) ++ "}"
+  Posn _ -> ""
 
 -- | The function used to print the stack's contents on program end.
 -- Equivalent to the @to_gs@ method from the original interpreter.

@@ -27,9 +27,9 @@ Library
                     , random >= 1.0 && < 1.1
                     , split >= 0.2 && < 0.3
   Exposed-Modules:  Language.GolfScript.Base
-                    Language.GolfScript.Scan
                     Language.GolfScript.Parse
                     Language.GolfScript.Prelude
+  Other-Modules:    Language.GolfScript.Scan
   Hs-Source-Dirs:   src
   Ghc-Options:      -Wall
 
