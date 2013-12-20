@@ -71,9 +71,17 @@ instance Read (Prim m) where readsPrec   = error "readsPrec: can't read Prim"
 -- | The state of a GolfScript program.
 data GolfState m = GolfState
   { stack_     :: [Val m]
+  -- ^ Starts out containing a string of the program input.
   , brackets_  :: [Int]
+  -- ^ The left bracket pushes a zero onto this list.
+  -- 'push' increments each of these numbers, and 'pop' decrements them while
+  -- not letting them go below zero.
+  -- The right bracket pops a number off this list, 'take's that many values off
+  -- the stack, reverses them, and puts them into a new list.
   , variables_ :: M.Map String (Val m)
-  , position_  :: Maybe (Int, Int) -- ^ (line, column)
+  , position_  :: Maybe (Int, Int)
+  -- ^ @'Just' (line, column)@ denotes the original position in the source file.
+  -- 'Nothing' means the current code is a dynamically eval'd string.
   } deriving (Eq, Ord, Show, Read)
 
 type Golf m = StateT (GolfState m) (ErrorT String m)
@@ -82,23 +90,18 @@ type Golf m = StateT (GolfState m) (ErrorT String m)
 runGolf :: (Monad m) => Golf m a -> GolfState m -> m (Either String a)
 runGolf g s = runErrorT $ evalStateT g s
 
+-- | Ends the program with an error, prepending the current source position.
 crash :: (Monad m) => String -> Golf m a
 crash s = position >>= \pos -> lift $ throwError $ case pos of
   Nothing     -> "<eval>: " ++ s
   Just (l, c) -> show l ++ ":" ++ show c ++ ": " ++ s
 
--- | The program stack. Starts out containing a single string of standard input.
 stack :: (Monad m) => Golf m [Val m]
 stack = gets stack_
 
 setStack :: (Monad m) => [Val m] -> Golf m ()
 setStack s = modify $ \gs -> gs { stack_ = s }
 
--- | The way array brackets work is somewhat convoluted. The left bracket pushes
--- a zero onto this list. The 'push' command increments each of these numbers,
--- and the 'pop' command decrements them (while not letting them go below zero).
--- The right bracket pops a number off this list, 'take's that many values off
--- the stack, reverses them, and puts them into a new list.
 brackets :: (Monad m) => Golf m [Int]
 brackets = gets brackets_
 
@@ -111,7 +114,6 @@ position = gets position_
 setPosition :: (Monad m) => Maybe (Int, Int) -> Golf m ()
 setPosition pos = modify $ \gs -> gs { position_ = pos }
 
--- | Named variables, stored in a hash table.
 variables :: (Monad m) => Golf m (M.Map String (Val m))
 variables = gets variables_
 
