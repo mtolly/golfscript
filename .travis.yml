@@ -1,5 +1,8 @@
 language: haskell
+ghc:
+  - 7.8
+  - 7.6
+  - 7.4
 before_install:
   - cabal install alex
   - cabal install happy
-

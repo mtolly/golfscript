@@ -23,7 +23,7 @@ Library
   Build-Depends:    base >= 4.6 && < 5
                     , array >= 0.4 && < 0.6
                     , hashmap >= 1.2 && < 1.4
-                    , transformers >= 0.2 && < 0.4
+                    , transformers >= 0.3 && < 0.5
                     , random >= 1.0 && < 1.1
                     , split >= 0.2 && < 0.3
   Exposed-Modules:  Language.GolfScript.Base
