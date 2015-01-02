@@ -31,7 +31,16 @@ TopList : Do TopList { $1 ++ $2 }
         | ':' '{' TopList { $3 }
         | ':' '}' TopList { $3 }
         | ':' { [] }
+        | '}' IgnoreRest { [] }
         | { [] }
+
+IgnoreRest : var IgnoreRest { () }
+           | int IgnoreRest { () }
+           | str IgnoreRest { () }
+           | '{' IgnoreRest { () }
+           | '}' IgnoreRest { () }
+           | ':' IgnoreRest { () }
+           |                { () }
 
 DoList : Do DoList { $1 ++ $2 }
        | ':' str DoList { $3 }
