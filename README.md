@@ -10,10 +10,8 @@ original Ruby implementation!
 
 ## Usage
 
-    cabal install alex happy
-    cd golfscript
-    cabal install
-    
+Download from the [releases page](https://github.com/mtolly/golfscript/releases).
+
     golfscript prog.gs < stdin.txt # program and stdin
     golfscript < prog.gs           # just program, empty stdin
 

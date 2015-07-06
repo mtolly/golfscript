@@ -24,7 +24,7 @@ import Control.Applicative ((<|>))
 import Control.Monad (liftM)
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Error (runErrorT, throwError, ErrorT)
+import Control.Monad.Trans.Except (runExceptT, throwE, ExceptT)
 import Control.Monad.Trans.State (gets, modify, evalStateT, StateT)
 import qualified Data.HashMap as M
 
@@ -84,15 +84,15 @@ data GolfState m = GolfState
   -- 'Nothing' means the current code is a dynamically eval'd string.
   } deriving (Eq, Ord, Show, Read)
 
-type Golf m = StateT (GolfState m) (ErrorT String m)
+type Golf m = StateT (GolfState m) (ExceptT String m)
 
 -- | Runs a Golf program in the embedded monad.
 runGolf :: (Monad m) => Golf m a -> GolfState m -> m (Either String a)
-runGolf g s = runErrorT $ evalStateT g s
+runGolf g s = runExceptT $ evalStateT g s
 
 -- | Ends the program with an error, prepending the current source position.
 crash :: (Monad m) => String -> Golf m a
-crash s = position >>= \pos -> lift $ throwError $ case pos of
+crash s = position >>= \pos -> lift $ throwE $ case pos of
   Nothing     -> "<eval>: " ++ s
   Just (l, c) -> show l ++ ":" ++ show c ++ ": " ++ s
 

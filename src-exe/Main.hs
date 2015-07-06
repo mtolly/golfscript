@@ -27,7 +27,7 @@ go input prog = do
       s = emptyWith preludeIO
   result <- runGolf (push (Str input) >> runs p >> fmap output stackToArr) s
   case result of
-    Left  err -> hPutStrLn stderr err
+    Left  err -> error err
     Right str -> putStrLn str
 
 printVersion :: Handle -> IO ()
